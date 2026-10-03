@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import os
 import time
 import random
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def get_stock_market(stock_code):
@@ -371,7 +372,11 @@ def get_stock_data_with_retry_all_history(stock_code="002354", retry_count=2):
             data.attrs['data_source'] = source_name
             return data
 
-    print("❌ 所有真实数据源都失败，使用示例数据...")
+    # 模拟数据不是真实行情，默认不使用，避免在不知情的情况下用假数据做预测
+    if os.environ.get("KRONOS_ALLOW_SAMPLE_DATA") != "1":
+        print("❌ 所有真实数据源都失败。请检查网络后重试（设置 KRONOS_ALLOW_SAMPLE_DATA=1 可生成模拟数据用于演示）")
+        return None
+    print("⚠️ 所有真实数据源都失败，按 KRONOS_ALLOW_SAMPLE_DATA=1 生成模拟数据（非真实行情）...")
     return create_sample_data_all_history(stock_code)
 
 
@@ -451,7 +456,7 @@ def create_sample_data_all_history(stock_code="002354"):
         low_price = min(open_price, close_price, high_price, low_price)
 
         # 生成成交量（随年份增长）
-        base_volume = 100000 + (year - list_year) * 50000  # 成交量逐年增长
+        base_volume = 100000 + (date.year - list_year) * 50000  # 成交量逐年增长
         volume_variation = abs(daily_return) * 5000000 if i > 0 else 0
         volume = int(base_volume + volume_variation + np.random.randint(-200000, 400000))
         volume = max(50000, volume)
@@ -563,7 +568,7 @@ def display_all_history_data_info(df, stock_code):
                 print(f"  {col}: {value}")
 
 
-def save_all_history_stock_data(df, stock_code, save_dir="D:/lianghuajiaoyi/Kronos/examples/data"):
+def save_all_history_stock_data(df, stock_code, save_dir=os.path.join(EXAMPLES_DIR, "data")):
     """
     保存全历史股票数据到指定目录
     """
@@ -597,7 +602,7 @@ def main_all_history(stock_code="002354"):
     主函数：获取并保存股票全历史数据
     """
     # 设置保存目录
-    save_directory = "D:/lianghuajiaoyi/Kronos/examples/data"
+    save_directory = os.path.join(EXAMPLES_DIR, "data")
 
     print("=" * 60)
     print(f"开始获取股票 {stock_code} 的全部历史数据")
@@ -647,7 +652,7 @@ if __name__ == "__main__":
     """
 
     # ==================== 在这里修改参数 ====================
-    TARGET_STOCK_CODE = "300418"  # 股票代码
+    TARGET_STOCK_CODE = os.environ.get("KRONOS_STOCK_CODE", "300418")  # 股票代码
     # =====================================================
 
     print("股票全历史数据获取工具")

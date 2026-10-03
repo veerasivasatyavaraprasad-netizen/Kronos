@@ -31,10 +31,19 @@ def resolve_device(device: str = "auto") -> str:
     return "cpu"
 
 
-def load_predictor(model_key: str = "kronos-small", device: str = "auto") -> KronosPredictor:
-    if model_key not in MODELS:
+def load_predictor(model_key: str = "kronos-small", device: str = "auto",
+                   model_path: str = None, tokenizer_path: str = None) -> KronosPredictor:
+    """Load a released model by key, or a fine-tuned one via model_path/tokenizer_path."""
+    if model_path:
+        model_id = str(ROOT / model_path) if (ROOT / model_path).exists() else model_path
+        tokenizer_id = str(ROOT / tokenizer_path) if tokenizer_path and (ROOT / tokenizer_path).exists() else tokenizer_path
+        if not tokenizer_id:
+            raise ValueError("tokenizer_path is required together with model_path")
+        max_ctx = 512
+    elif model_key in MODELS:
+        model_id, tokenizer_id, max_ctx = MODELS[model_key]
+    else:
         raise ValueError(f"Unknown model '{model_key}'. Choose from {list(MODELS)}")
-    model_id, tokenizer_id, max_ctx = MODELS[model_key]
     tokenizer = KronosTokenizer.from_pretrained(tokenizer_id)
     model = Kronos.from_pretrained(model_id)
     model.eval()

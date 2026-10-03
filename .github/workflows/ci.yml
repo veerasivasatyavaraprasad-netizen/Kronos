@@ -26,7 +26,13 @@ jobs:
         run: python -m pytest tests -q
       - name: Automation smoke test
         run: python -m automation.kronos_auto run --only SAMPLE_A_SHARE_5MIN
+      - name: Example script smoke test
+        run: MPLBACKEND=Agg python examples/prediction_example.py
+      - name: Quick fine-tune smoke test
+        run: python -m automation.kronos_auto finetune --config finetune_csv/configs/config_quick_cpu.yaml
       - uses: actions/upload-artifact@v4
         with:
           name: smoke-forecast
-          path: outputs/latest
+          path: |
+            outputs/latest
+            outputs/prediction_example.png

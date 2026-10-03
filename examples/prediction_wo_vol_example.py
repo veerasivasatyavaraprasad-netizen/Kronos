@@ -1,7 +1,9 @@
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import sys
-sys.path.append("../")
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(EXAMPLES_DIR))
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 
@@ -23,6 +25,10 @@ def plot_prediction(kline_df, pred_df):
     ax.grid(True)
 
     plt.tight_layout()
+    out_png = os.path.join(os.path.dirname(EXAMPLES_DIR), "outputs", os.path.basename(__file__).replace(".py", ".png"))
+    os.makedirs(os.path.dirname(out_png), exist_ok=True)
+    plt.savefig(out_png)
+    print(f"Chart saved to {out_png}")
     plt.show()
 
 
@@ -31,10 +37,14 @@ tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
 model = Kronos.from_pretrained("NeoQuasar/Kronos-small")
 
 # 2. Instantiate Predictor
-predictor = KronosPredictor(model, tokenizer, device="cuda:0", max_context=512)
+predictor = KronosPredictor(model, tokenizer, device=None, max_context=512)
 
 # 3. Prepare Data
-df = pd.read_csv("./data/XSHG_5min_600977.csv")
+# Uses data/XSHG_5min_600977.csv if present, otherwise the bundled sample in the same 5-min A-share format
+DATA_FILE = os.path.join(os.path.dirname(EXAMPLES_DIR), "data", "XSHG_5min_600977.csv")
+if not os.path.exists(DATA_FILE):
+    DATA_FILE = os.path.join(os.path.dirname(EXAMPLES_DIR), "data", "sample_a_share_5min.csv")
+df = pd.read_csv(DATA_FILE)
 df['timestamps'] = pd.to_datetime(df['timestamps'])
 
 lookback = 400

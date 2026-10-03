@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import os
 from datetime import datetime, timedelta
 import warnings
+EXAMPLES_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 warnings.filterwarnings('ignore')
 
@@ -18,9 +19,41 @@ class HistoricalBacktester:
     历史回测类：用历史数据验证模型预测效果
     """
 
-    def __init__(self, data_dir, initial_capital=100000):
+    def __init__(self, data_dir, initial_capital=100000, use_kronos=True, model_name="NeoQuasar/Kronos-small",
+                 tokenizer_name="NeoQuasar/Kronos-Tokenizer-base"):
         self.data_dir = data_dir
         self.initial_capital = initial_capital
+        self.use_kronos = use_kronos
+        self.model_name = model_name
+        self.tokenizer_name = tokenizer_name
+        self.predictor = None
+
+    def kronos_prediction(self, history_list, future_list, pred_days):
+        """用Kronos模型批量预测每个窗口之后pred_days天的收盘价"""
+        if self.predictor is None:
+            import sys
+            sys.path.insert(0, os.path.dirname(EXAMPLES_DIR))
+            from model import Kronos, KronosTokenizer, KronosPredictor
+            print(f"加载Kronos模型: {self.model_name}")
+            tokenizer = KronosTokenizer.from_pretrained(self.tokenizer_name)
+            model = Kronos.from_pretrained(self.model_name)
+            self.predictor = KronosPredictor(model, tokenizer, max_context=512)
+
+        cols = ['open', 'high', 'low', 'close', 'volume', 'amount']
+        df_list, x_ts, y_ts = [], [], []
+        for hist, fut in zip(history_list, future_list):
+            hist = hist.copy()
+            if 'amount' not in hist.columns:
+                hist['amount'] = hist['volume'] * hist['close']
+            df_list.append(hist[cols].reset_index(drop=True))
+            x_ts.append(pd.Series(hist.index))
+            # 实际未来交易日不足pred_days时，用工作日补齐时间戳
+            y = list(fut.index) + list(pd.bdate_range(hist.index[-1] + timedelta(days=1), periods=pred_days * 2))
+            y = sorted(set(y))[:pred_days] if len(fut) < pred_days else list(fut.index)
+            y_ts.append(pd.Series(y))
+        preds = self.predictor.predict_batch(df_list, x_ts, y_ts, pred_len=pred_days, T=1.0, top_p=0.9,
+                                             sample_count=1, verbose=False)
+        return [p['close'].values for p in preds]
 
     def load_historical_data(self, stock_code):
         """加载历史数据"""
@@ -63,15 +96,16 @@ class HistoricalBacktester:
         # 从数据中选取多个时间点进行"预测"
         test_points = range(lookback_days, len(df) - pred_days, pred_days)
 
-        for start_idx in test_points:
-            # 模拟预测：使用前lookback_days天数据"预测"后pred_days天
-            historical_data = df.iloc[start_idx - lookback_days:start_idx]
-            actual_future = df.iloc[start_idx:start_idx + pred_days]
+        test_points = list(test_points)
+        windows = [(df.iloc[i - lookback_days:i], df.iloc[i:i + pred_days]) for i in test_points]
+        if self.use_kronos:
+            # 使用Kronos模型对所有回测窗口做一次批量预测
+            all_preds = self.kronos_prediction([w[0] for w in windows], [w[1] for w in windows], pred_days)
+        else:
+            # 基线：随机游走（用于与Kronos对比）
+            all_preds = [self.simple_prediction(h, pred_days) for h, _ in windows]
 
-            # 简单的预测策略（这里应该替换为您的实际模型预测）
-            # 这里使用移动平均作为示例预测
-            pred_close = self.simple_prediction(historical_data, pred_days)
-
+        for (historical_data, actual_future), pred_close in zip(windows, all_preds):
             # 记录结果
             for i in range(min(len(pred_close), len(actual_future))):
                 results.append({
@@ -125,9 +159,10 @@ class HistoricalBacktester:
         portfolio_values = []
 
         # 按日期排序
-        results_df = results_df.sort_index()
+        results_df = results_df.sort_values('date')
 
-        for date, row in results_df.iterrows():
+        for _, row in results_df.iterrows():
+            date = row['date']
             current_price = row['actual_close']
             predicted_price = row['predicted_close']
             predicted_return = (predicted_price - current_price) / current_price
@@ -337,9 +372,9 @@ def main():
     """主函数"""
     # 配置参数
     BACKTEST_CONFIG = {
-        "stock_code": "300418",
-        "data_dir": r"D:\lianghuajiaoyi\Kronos\examples\data",
-        "output_dir": r"D:\lianghuajiaoyi\Kronos\examples\historical_backtest",
+        "stock_code": os.environ.get("KRONOS_STOCK_CODE", "300418"),
+        "data_dir": os.path.join(EXAMPLES_DIR, "data"),
+        "output_dir": os.path.join(EXAMPLES_DIR, "historical_backtest"),
         "initial_capital": 100000,
         "lookback_days": 60,  # 使用60天历史数据
         "pred_days": 30,  # 预测30天
@@ -357,7 +392,9 @@ def main():
     # 创建回测器并运行
     backtester = HistoricalBacktester(
         data_dir=BACKTEST_CONFIG["data_dir"],
-        initial_capital=BACKTEST_CONFIG["initial_capital"]
+        initial_capital=BACKTEST_CONFIG["initial_capital"],
+        # 设置环境变量 KRONOS_BACKTEST_BASELINE=1 可改用随机游走基线做对比
+        use_kronos=os.environ.get("KRONOS_BACKTEST_BASELINE") != "1"
     )
 
     accuracy, performance, results = backtester.run_complete_backtest(

@@ -8,8 +8,9 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# CPU-only PyTorch keeps the image small; use a CUDA base image for GPU hosts.
-RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
+# CPU-only PyTorch keeps the image small (falls back to the default PyPI wheel if that index is unreachable).
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+RUN pip install torch --index-url ${TORCH_INDEX_URL} || pip install torch
 COPY requirements.txt requirements-app.txt ./
 RUN pip install -r requirements-app.txt
 
@@ -18,6 +19,8 @@ COPY automation ./automation
 COPY webui ./webui
 COPY data ./data
 COPY tests ./tests
+COPY finetune_csv ./finetune_csv
+COPY conftest.py ./
 
 # Bake the default models into the image so containers start offline.
 RUN python -m automation.kronos_auto setup-models --model kronos-small \

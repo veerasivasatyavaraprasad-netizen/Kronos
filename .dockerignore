@@ -4,6 +4,7 @@ outputs
 figures
 examples
 finetune
-finetune_csv
+finetune_csv/finetuned
+finetune_csv/examples
 **/__pycache__
 webui/prediction_results

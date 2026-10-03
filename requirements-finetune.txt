@@ -1,0 +1,5 @@
+# Extra dependencies for the Qlib A-share fine-tuning pipeline (finetune/).
+-r requirements-app.txt
+pyqlib>=0.9.6
+# Optional experiment tracking, enabled when COMET_API_KEY is set:
+# comet_ml

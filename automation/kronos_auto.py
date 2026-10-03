@@ -6,11 +6,13 @@ Kronos automation CLI.
     python -m automation.kronos_auto forecast --csv data/sample_a_share_5min.csv --pred-len 24
     python -m automation.kronos_auto run                     # forecast every symbol in config.yaml
     python -m automation.kronos_auto run --every 60          # ...and repeat every 60 minutes
+    python -m automation.kronos_auto finetune                # quick CPU fine-tune on bundled CSV
     python -m automation.kronos_auto serve                   # start the web UI
 """
 import argparse
 import datetime as dt
 import json
+import os
 import shutil
 import sys
 import time
@@ -144,8 +146,10 @@ def run_symbols(specs, cfg, evaluate_too=True):
 
     defaults = cfg.get("defaults", {})
     device = resolve_device(cfg.get("device", "auto"))
-    print(f"Loading {cfg.get('model', 'kronos-small')} on {device} ...")
-    predictor = load_predictor(cfg.get("model", "kronos-small"), device)
+    model_label = cfg.get("model_path") or cfg.get("model", "kronos-small")
+    print(f"Loading {model_label} on {device} ...")
+    predictor = load_predictor(cfg.get("model", "kronos-small"), device,
+                               cfg.get("model_path"), cfg.get("tokenizer_path"))
 
     stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = _abs(cfg.get("output_dir", "outputs")) / stamp
@@ -178,7 +182,7 @@ def run_symbols(specs, cfg, evaluate_too=True):
         results.append(res)
 
     meta = {"generated": dt.datetime.now().isoformat(timespec="seconds"),
-            "model": cfg.get("model", "kronos-small"), "device": device}
+            "model": model_label, "device": device}
     (run_dir / "summary.json").write_text(json.dumps({"meta": meta, "results": results}, indent=2), encoding="utf-8")
     write_markdown(results, run_dir / "summary.md", meta)
 
@@ -223,8 +227,27 @@ def cmd_run(args):
         time.sleep(args.every * 60)
 
 
+def cmd_finetune(args):
+    """Fine-tune tokenizer + predictor on a CSV (finetune_csv pipeline); multi-GPU via torchrun."""
+    import subprocess
+    script = ROOT / "finetune_csv" / "train_sequential.py"
+    cmd = [sys.executable, str(script), "--config", str(_abs(args.config))]
+    if args.gpus and args.gpus > 1:
+        cmd = [sys.executable, "-m", "torch.distributed.run", "--standalone", f"--nproc_per_node={args.gpus}",
+               str(script), "--config", str(_abs(args.config))]
+    cmd += args.extra
+    print("Running:", " ".join(cmd))
+    rc = subprocess.call(cmd, cwd=str(ROOT))
+    if rc == 0:
+        import finetune_csv.config_loader as cl  # noqa: F401  (resolve output paths for the hint)
+        conf = cl.CustomFinetuneConfig(str(_abs(args.config)))
+        print("\nUse the fine-tuned model for forecasts by adding to automation/config.yaml:")
+        print(f"  model_path: {os.path.relpath(conf.basemodel_best_model_path, ROOT)}")
+        print(f"  tokenizer_path: {os.path.relpath(conf.tokenizer_best_model_path, ROOT)}")
+    return rc
+
+
 def cmd_serve(args):
-    import os
     os.environ.setdefault("KRONOS_DATA_DIR", str(DATA_DIR))
     sys.path.insert(0, str(ROOT / "webui"))
     from webui.app import app
@@ -269,6 +292,13 @@ def main(argv=None):
     s.add_argument("--every", type=float, help="repeat every N minutes")
     s.add_argument("--no-backtest", action="store_true")
     s.set_defaults(func=cmd_run)
+
+    s = sub.add_parser("finetune", help="fine-tune Kronos on a CSV dataset (finetune_csv pipeline)")
+    s.add_argument("--config", default="finetune_csv/configs/config_quick_cpu.yaml")
+    s.add_argument("--gpus", type=int, default=1, help="number of GPUs (uses torchrun when > 1)")
+    s.add_argument("extra", nargs=argparse.REMAINDER,
+                   help="extra args for train_sequential.py, e.g. --skip-tokenizer")
+    s.set_defaults(func=cmd_finetune)
 
     s = sub.add_parser("serve", help="start the web UI")
     s.add_argument("--host", default="0.0.0.0")

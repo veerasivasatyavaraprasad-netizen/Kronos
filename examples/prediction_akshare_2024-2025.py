@@ -9,7 +9,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 添加项目路径以便导入自定义模块
-sys.path.append("../")
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(EXAMPLES_DIR))
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 # 设置中文字体
@@ -202,14 +203,14 @@ def plot_prediction_with_details(kline_df, pred_df, future_dates, stock_code="00
 
     # 1. 价格图表 - 更大更清晰
     # 只显示最近200个交易日的历史数据，避免图表过于拥挤
-    recent_history = close_df['历史数据'].iloc[-min(200, len(close_df['历史数据'])):]
+    recent_history = close_df['历史数据'].dropna().iloc[-200:]
     ax1.plot(recent_history.index, recent_history.values, label='历史价格', color='#1f77b4', linewidth=2.5, alpha=0.9)
-    ax1.plot(close_df['预测数据'].index, close_df['预测数据'].values, label='预测价格',
+    ax1.plot(close_df['预测数据'].dropna().index, close_df['预测数据'].dropna().values, label='预测价格',
              color='#ff7f0e', linewidth=2.5, linestyle='-', marker='o', markersize=3)
 
     # 添加预测起始点的标记
-    prediction_start_date = close_df['预测数据'].index[0] if len(close_df['预测数据']) > 0 else close_df.index[-1]
-    prediction_start_price = close_df['历史数据'].iloc[-1]
+    prediction_start_date = close_df['预测数据'].dropna().index[0] if len(close_df['预测数据']) > 0 else close_df.index[-1]
+    prediction_start_price = close_df['历史数据'].dropna().iloc[-1]
     ax1.axvline(x=prediction_start_date, color='red', linestyle='--', alpha=0.7, linewidth=1.5)
     ax1.annotate('预测起点', xy=(prediction_start_date, prediction_start_price),
                  xytext=(10, 10), textcoords='offset points',
@@ -247,7 +248,7 @@ def plot_prediction_with_details(kline_df, pred_df, future_dates, stock_code="00
 
     # 3. 价格变动图表 - 优化显示
     if len(close_df['预测数据']) > 0:
-        price_change = close_df['预测数据'] - close_df['历史数据'].iloc[-1]
+        price_change = close_df['预测数据'].dropna() - close_df['历史数据'].dropna().iloc[-1]
         colors = ['green' if x >= 0 else 'red' for x in price_change]
 
         # 每5个交易日显示一个标签，避免过于拥挤
@@ -277,13 +278,13 @@ def plot_prediction_with_details(kline_df, pred_df, future_dates, stock_code="00
         ax3.set_xticklabels([f'D{i + 1}' for i in xticks_positions])
 
     # 添加详细的统计信息框
-    if len(close_df['预测数据']) > 0 and not np.isnan(close_df['历史数据'].iloc[-1]):
+    if len(close_df['预测数据']) > 0 and not np.isnan(close_df['历史数据'].dropna().iloc[-1]):
         pred_stats = {
             '股票代码': stock_code,
             '股票名称': stock_name,
-            '当前价格': f"{close_df['历史数据'].iloc[-1]:.2f} 元",
-            '预测结束价格': f"{close_df['预测数据'].iloc[-1]:.2f} 元",
-            '预测涨跌幅': f"{(close_df['预测数据'].iloc[-1] / close_df['历史数据'].iloc[-1] - 1) * 100:+.2f}%",
+            '当前价格': f"{close_df['历史数据'].dropna().iloc[-1]:.2f} 元",
+            '预测结束价格': f"{close_df['预测数据'].dropna().iloc[-1]:.2f} 元",
+            '预测涨跌幅': f"{(close_df['预测数据'].dropna().iloc[-1] / close_df['历史数据'].dropna().iloc[-1] - 1) * 100:+.2f}%",
             '预测期间最高价': f"{close_df['预测数据'].max():.2f} 元",
             '预测期间最低价': f"{close_df['预测数据'].min():.2f} 元",
             '预测波动率': f"{close_df['预测数据'].std():.2f} 元",
@@ -321,16 +322,19 @@ def generate_prediction_report(close_df, volume_df, pred_df, future_dates, stock
     print(f"📊 {stock_name}({stock_code}) 股票预测报告")
     print(f"{'=' * 70}")
 
-    if len(close_df['预测数据']) == 0 or np.isnan(close_df['历史数据'].iloc[-1]):
+    if len(close_df['预测数据']) == 0 or np.isnan(close_df['历史数据'].dropna().iloc[-1]):
         print("❌ 没有有效的预测数据可生成报告")
         return
 
+    historical_close = close_df['历史数据'].dropna().iloc[-1]
+    # 历史与预测合并在同一索引上，只保留预测期的行
+    close_df = close_df[close_df['预测数据'].notna()]
+    volume_df = volume_df[volume_df['预测数据'].notna()]
     # 确保所有数组长度一致
     min_len = min(len(close_df['预测数据']), len(volume_df['预测数据']), len(future_dates))
 
     # 基本统计
-    historical_close = close_df['历史数据'].iloc[-1]
-    predicted_close = close_df['预测数据'].iloc[-1]
+    predicted_close = close_df['预测数据'].dropna().iloc[-1]
     price_change_pct = (predicted_close / historical_close - 1) * 100
 
     print(f"🔮 预测概览:")
@@ -404,7 +408,7 @@ def main(stock_code="002354", stock_name="天娱数科", data_dir="./data", pred
 
         # 2. 实例化预测器
         print("步骤2: 初始化预测器...")
-        predictor = KronosPredictor(model, tokenizer, device="cuda:0", max_context=512)
+        predictor = KronosPredictor(model, tokenizer, device=None, max_context=512)
         print("✅ 预测器初始化完成")
 
         # 3. 准备数据
@@ -424,8 +428,8 @@ def main(stock_code="002354", stock_name="天娱数科", data_dir="./data", pred
         # 5. 准备输入数据
         print("步骤5: 准备输入数据...")
         # 使用最新的数据作为输入
-        x_df = df.loc[-lookback:, ['open', 'high', 'low', 'close', 'volume', 'amount']].reset_index(drop=True)
-        x_timestamp = df.loc[-lookback:, 'timestamps'].reset_index(drop=True)
+        x_df = df.iloc[-lookback:][['open', 'high', 'low', 'close', 'volume', 'amount']].reset_index(drop=True)
+        x_timestamp = df.iloc[-lookback:]['timestamps'].reset_index(drop=True)
 
         # 生成未来日期（考虑节假日）
         last_historical_date = df['timestamps'].iloc[-1]
@@ -462,7 +466,7 @@ def main(stock_code="002354", stock_name="天娱数科", data_dir="./data", pred
         # 8. 可视化结果
         print("步骤8: 生成可视化图表...")
         # 使用最后一部分历史数据和预测数据
-        kline_df = df.loc[-lookback:].reset_index(drop=True)
+        kline_df = df.iloc[-lookback:].reset_index(drop=True)
         close_df, volume_df = plot_prediction_with_details(kline_df, pred_df, future_dates, stock_code, stock_name,
                                                            pred_len, output_dir)
 
@@ -476,10 +480,10 @@ def main(stock_code="002354", stock_name="天娱数科", data_dir="./data", pred
         print(f"  📋 {os.path.join(output_dir, stock_code + '_detailed_predictions.csv')} - 详细预测数据")
 
         # 显示预测总结
-        if len(close_df['预测数据']) > 0 and not np.isnan(close_df['历史数据'].iloc[-1]):
+        if len(close_df['预测数据']) > 0 and not np.isnan(close_df['历史数据'].dropna().iloc[-1]):
             print(f"\n📈 预测总结:")
-            historical_price = close_df['历史数据'].iloc[-1]
-            predicted_price = close_df['预测数据'].iloc[-1]
+            historical_price = close_df['历史数据'].dropna().iloc[-1]
+            predicted_price = close_df['预测数据'].dropna().iloc[-1]
             change_pct = (predicted_price / historical_price - 1) * 100
 
             print(f"  当前价格: {historical_price:.2f} 元")
@@ -518,17 +522,17 @@ if __name__ == "__main__":
 
     # ==================== 在这里修改股票配置 ====================
     STOCK_CONFIG = {
-        "stock_code": "300418",  # 股票代码
+        "stock_code": os.environ.get("KRONOS_STOCK_CODE", "300418"),  # 股票代码
         "stock_name": "昆仑万维",  # 股票名称
-        "data_dir": "./data",  # 数据文件目录
+        "data_dir": os.path.join(EXAMPLES_DIR, "data"),  # 数据文件目录
         "pred_days": 100,  # 预测100个自然日
-        "output_dir": r"D:\lianghuajiaoyi\Kronos\examples\yuce"  # 输出文件目录
+        "output_dir": os.path.join(EXAMPLES_DIR, "yuce")  # 输出文件目录
     }
 
     # 其他股票配置示例：
-    # STOCK_CONFIG = {"stock_code": "000001", "stock_name": "平安银行", "data_dir": "./data", "pred_days": 100, "output_dir": r"D:\lianghuajiaoyi\Kronos\examples\yuce"}
-    # STOCK_CONFIG = {"stock_code": "600036", "stock_name": "招商银行", "data_dir": "./data", "pred_days": 100, "output_dir": r"D:\lianghuajiaoyi\Kronos\examples\yuce"}
-    # STOCK_CONFIG = {"stock_code": "300750", "stock_name": "宁德时代", "data_dir": "./data", "pred_days": 100, "output_dir": r"D:\lianghuajiaoyi\Kronos\examples\yuce"}
+    # STOCK_CONFIG = {"stock_code": os.environ.get("KRONOS_STOCK_CODE", "000001"), "stock_name": "平安银行", "data_dir": os.path.join(EXAMPLES_DIR, "data"), "pred_days": 100, "output_dir": os.path.join(EXAMPLES_DIR, "yuce")}
+    # STOCK_CONFIG = {"stock_code": os.environ.get("KRONOS_STOCK_CODE", "600036"), "stock_name": "招商银行", "data_dir": os.path.join(EXAMPLES_DIR, "data"), "pred_days": 100, "output_dir": os.path.join(EXAMPLES_DIR, "yuce")}
+    # STOCK_CONFIG = {"stock_code": os.environ.get("KRONOS_STOCK_CODE", "300750"), "stock_name": "宁德时代", "data_dir": os.path.join(EXAMPLES_DIR, "data"), "pred_days": 100, "output_dir": os.path.join(EXAMPLES_DIR, "yuce")}
     # =========================================================
 
     print("🤖 智能股票预测工具")

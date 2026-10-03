@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 CONFIG ?= automation/config.yaml
 
-.PHONY: setup models run forecast fetch serve test docker-build docker-up docker-run clean
+.PHONY: setup models run forecast fetch serve test examples finetune finetune-full qlib-pipeline docker-build docker-up docker-run clean
 
 setup:            ## create venv, install deps, download models, smoke test
 	./scripts/setup.sh
@@ -23,6 +23,20 @@ serve:            ## start the web UI on :7070
 
 test:             ## run regression tests
 	$(PY) -m pytest tests -q
+
+examples:         ## run the example scripts that work offline (charts -> outputs/)
+	cd /tmp && MPLBACKEND=Agg $(abspath $(PY)) $(CURDIR)/examples/prediction_example.py
+	cd /tmp && MPLBACKEND=Agg $(abspath $(PY)) $(CURDIR)/examples/prediction_wo_vol_example.py
+	cd /tmp && MPLBACKEND=Agg $(abspath $(PY)) $(CURDIR)/examples/prediction_batch_example.py
+
+finetune:         ## quick CPU fine-tune on the bundled CSV (minutes)
+	$(PY) -m automation.kronos_auto finetune --config finetune_csv/configs/config_quick_cpu.yaml
+
+finetune-full:    ## full CSV fine-tune (GPU recommended); GPUS=2 for multi-GPU
+	$(PY) -m automation.kronos_auto finetune --config finetune_csv/configs/config_ali09988_candle-5min.yaml --gpus $(or $(GPUS),1)
+
+qlib-pipeline:    ## Qlib A-share pipeline: download, preprocess, fine-tune, backtest
+	PYTHON=$(abspath $(PY)) ./finetune/run_pipeline.sh
 
 docker-build:
 	docker compose build

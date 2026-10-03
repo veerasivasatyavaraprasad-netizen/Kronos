@@ -57,6 +57,25 @@ AVAILABLE_MODELS = {
     }
 }
 
+def register_finetuned_models():
+    """Expose models produced by finetune_csv (finetune_csv/finetuned/<exp>/...) in the model list"""
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'finetune_csv', 'finetuned')
+    if not os.path.isdir(root):
+        return
+    for exp in sorted(os.listdir(root)):
+        model_dir = os.path.join(root, exp, 'basemodel', 'best_model')
+        tok_dir = os.path.join(root, exp, 'tokenizer', 'best_model')
+        if os.path.isdir(model_dir) and os.path.isdir(tok_dir):
+            AVAILABLE_MODELS[f'finetuned-{exp}'] = {
+                'name': f'Fine-tuned: {exp}',
+                'model_id': model_dir,
+                'tokenizer_id': tok_dir,
+                'context_length': 512,
+                'params': 'custom',
+                'description': 'Model fine-tuned on your own data'
+            }
+
+
 DATA_DIR = os.path.abspath(os.environ.get(
     'KRONOS_DATA_DIR',
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')))
@@ -654,6 +673,7 @@ def load_model():
         model_key = data.get('model_key', 'kronos-small')
         device = data.get('device', 'cpu')
         
+        register_finetuned_models()
         if model_key not in AVAILABLE_MODELS:
             return jsonify({'error': f'Unsupported model: {model_key}'}), 400
         
@@ -683,6 +703,7 @@ def load_model():
 @app.route('/api/available-models')
 def get_available_models():
     """Get available model list"""
+    register_finetuned_models()
     return jsonify({
         'models': AVAILABLE_MODELS,
         'model_available': MODEL_AVAILABLE

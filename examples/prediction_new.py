@@ -15,7 +15,8 @@ from typing import Dict, List, Tuple, Optional
 warnings.filterwarnings('ignore')
 
 # 添加项目路径以便导入自定义模块
-sys.path.append("../")
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(EXAMPLES_DIR))
 try:
     from model import Kronos, KronosTokenizer, KronosPredictor
 except ImportError:
@@ -1176,7 +1177,7 @@ def run_comprehensive_kronos_prediction(stock_code, stock_name, data_dir, pred_d
 
         # 3. 实例化预测器
         print("步骤3: 初始化预测器...")
-        predictor = KronosPredictor(model, tokenizer, device="cuda:0", max_context=512)
+        predictor = KronosPredictor(model, tokenizer, device=None, max_context=512)
         print("✅ 预测器初始化完成")
 
         # 4. 准备数据
@@ -1195,8 +1196,8 @@ def run_comprehensive_kronos_prediction(stock_code, stock_name, data_dir, pred_d
 
         # 6. 准备输入数据
         print("步骤6: 准备输入数据...")
-        x_df = df.loc[-lookback:, ['open', 'high', 'low', 'close', 'volume', 'amount']].reset_index(drop=True)
-        x_timestamp = df.loc[-lookback:, 'timestamps'].reset_index(drop=True)
+        x_df = df.iloc[-lookback:][['open', 'high', 'low', 'close', 'volume', 'amount']].reset_index(drop=True)
+        x_timestamp = df.iloc[-lookback:]['timestamps'].reset_index(drop=True)
 
         # 生成未来日期
         last_historical_date = df['timestamps'].iloc[-1]
@@ -1226,7 +1227,7 @@ def run_comprehensive_kronos_prediction(stock_code, stock_name, data_dir, pred_d
         # 8. 使用多维度市场因素增强预测
         print("步骤8: 应用多维度市场因素增强预测...")
         enhanced_pred_df, enhancement_info = enhance_prediction_with_market_factors(
-            df.loc[-lookback:].reset_index(drop=True),
+            df.iloc[-lookback:].reset_index(drop=True),
             pred_df,
             stock_code,
             market_analyzer
@@ -1234,13 +1235,14 @@ def run_comprehensive_kronos_prediction(stock_code, stock_name, data_dir, pred_d
 
         # 将增强预测结果添加到信息中
         enhancement_info['enhanced_prediction'] = enhanced_pred_df
+        enhancement_info['analysis_summary'] = generate_analysis_summary(enhancement_info)
 
         # 9. 创建综合市场分析报告
         market_report = create_comprehensive_market_report(enhancement_info, output_dir, stock_code)
 
         # 10. 可视化结果
         print("步骤9: 生成综合版可视化图表...")
-        historical_df = df.loc[-lookback:].reset_index(drop=True)
+        historical_df = df.iloc[-lookback:].reset_index(drop=True)
         hist_prices, base_pred_prices = plot_comprehensive_prediction(
             historical_df, pred_df, future_dates, stock_code, stock_name, output_dir, enhancement_info
         )
@@ -1305,11 +1307,11 @@ def main():
     """
     # ==================== 配置参数 ====================
     STOCK_CONFIG = {
-        "stock_code": "603288",
+        "stock_code": os.environ.get("KRONOS_STOCK_CODE", "603288"),
         "stock_name": "海天味业",
-        "data_dir": r"D:\lianghuajiaoyi\Kronos\examples\data",
+        "data_dir": os.path.join(EXAMPLES_DIR, "data"),
         "pred_days": 60,
-        "output_dir": r"D:\lianghuajiaoyi\Kronos\examples\yuce",
+        "output_dir": os.path.join(EXAMPLES_DIR, "yuce"),
         "history_years": 1
     }
 

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import os
 import time
 import random
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def get_stock_market(stock_code):
@@ -377,7 +378,11 @@ def get_stock_data_with_retry(stock_code="002354", start_year=2024, end_year=202
             else:
                 print(f"⚠️ 数据未包含目标年份数据")
 
-    print("❌ 所有真实数据源都失败，使用示例数据...")
+    # 模拟数据不是真实行情，默认不使用，避免在不知情的情况下用假数据做预测
+    if os.environ.get("KRONOS_ALLOW_SAMPLE_DATA") != "1":
+        print("❌ 所有真实数据源都失败。请检查网络后重试（设置 KRONOS_ALLOW_SAMPLE_DATA=1 可生成模拟数据用于演示）")
+        return None
+    print("⚠️ 所有真实数据源都失败，按 KRONOS_ALLOW_SAMPLE_DATA=1 生成模拟数据（非真实行情）...")
     return create_sample_data(stock_code, start_year, end_year)
 
 
@@ -540,7 +545,7 @@ def display_data_info(df, stock_code, start_year, end_year):
                 print(f"  {col}: {value}")
 
 
-def save_stock_data(df, stock_code, save_dir="D:/lianghuajiaoyi/Kronos/examples/data"):
+def save_stock_data(df, stock_code, save_dir=os.path.join(EXAMPLES_DIR, "data")):
     """
     保存股票数据到指定目录
     """
@@ -565,7 +570,7 @@ def main(stock_code="002354", start_year=2024, end_year=2025):
     主函数：获取并保存股票数据 - 最终版
     """
     # 设置保存目录
-    save_directory = "D:/lianghuajiaoyi/Kronos/examples/data"
+    save_directory = os.path.join(EXAMPLES_DIR, "data")
 
     print("=" * 60)
     print(f"开始获取股票 {stock_code} 的 {start_year}-{end_year} 年数据")
@@ -613,7 +618,7 @@ if __name__ == "__main__":
     """
 
     # ==================== 在这里修改参数 ====================
-    TARGET_STOCK_CODE = "300418"  # 股票代码
+    TARGET_STOCK_CODE = os.environ.get("KRONOS_STOCK_CODE", "300418")  # 股票代码
     START_YEAR = 2024  # 开始年份
     END_YEAR = 2025  # 结束年份
     # =====================================================

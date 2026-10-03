@@ -20,16 +20,24 @@ def setup_ddp():
     if not dist.is_available():
         raise RuntimeError("torch.distributed is not available.")
 
-    dist.init_process_group(backend="nccl")
+    # NCCL needs GPUs; fall back to gloo so the same scripts also run on CPU-only machines.
+    backend = "nccl" if torch.cuda.is_available() else "gloo"
+    dist.init_process_group(backend=backend)
     rank = int(os.environ["RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
     local_rank = int(os.environ["LOCAL_RANK"])
-    torch.cuda.set_device(local_rank)
+    if torch.cuda.is_available():
+        torch.cuda.set_device(local_rank)
     print(
         f"[DDP Setup] Global Rank: {rank}/{world_size}, "
-        f"Local Rank (GPU): {local_rank} on device {torch.cuda.current_device()}"
+        f"Local Rank: {local_rank} on device {get_device(local_rank)} ({backend})"
     )
     return rank, world_size, local_rank
+
+
+def get_device(local_rank: int = 0) -> torch.device:
+    """GPU for this rank when available, otherwise CPU."""
+    return torch.device(f"cuda:{local_rank}") if torch.cuda.is_available() else torch.device("cpu")
 
 
 def cleanup_ddp():

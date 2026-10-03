@@ -17,7 +17,8 @@ import datetime
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-sys.path.append('../')
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model import Kronos, KronosTokenizer, KronosPredictor
 from config_loader import CustomFinetuneConfig
 
@@ -25,7 +26,7 @@ from config_loader import CustomFinetuneConfig
 class CustomKlineDataset(Dataset):
     
     def __init__(self, data_path, data_type='train', lookback_window=90, predict_window=10, 
-                 clip=5.0, seed=100, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
+                 clip=5.0, seed=100, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, max_samples=None):
         self.data_path = data_path
         self.data_type = data_type
         self.lookback_window = lookback_window
@@ -46,6 +47,8 @@ class CustomKlineDataset(Dataset):
         self._split_data_by_time()
         
         self.n_samples = len(self.data) - self.window + 1
+        if max_samples:
+            self.n_samples = min(self.n_samples, int(max_samples))
             
         print(f"[{data_type.upper()}] Data length: {len(self.data)}, Available samples: {self.n_samples}")
     
@@ -67,7 +70,7 @@ class CustomKlineDataset(Dataset):
         
         if self.data.isnull().any().any():
             print("Warning: Missing values found in data, performing forward fill")
-            self.data = self.data.fillna(method='ffill')
+            self.data = self.data.ffill()
         
         print(f"Original data time range: {self.timestamps.min()} to {self.timestamps.max()}")
         print(f"Original data total length: {len(df)} records")
@@ -191,7 +194,8 @@ def create_dataloaders(config):
         seed=config.seed,
         train_ratio=config.train_ratio,
         val_ratio=config.val_ratio,
-        test_ratio=config.test_ratio
+        test_ratio=config.test_ratio,
+        max_samples=config.max_train_samples
     )
     
     val_dataset = CustomKlineDataset(
@@ -203,7 +207,8 @@ def create_dataloaders(config):
         seed=config.seed + 1,
         train_ratio=config.train_ratio,
         val_ratio=config.val_ratio,
-        test_ratio=config.test_ratio
+        test_ratio=config.test_ratio,
+        max_samples=config.max_val_samples
     )
     
     use_ddp = dist.is_available() and dist.is_initialized()

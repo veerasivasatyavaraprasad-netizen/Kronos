@@ -15,7 +15,8 @@ from logging.handlers import RotatingFileHandler
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-sys.path.append("../")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model import KronosTokenizer
 from finetune_base_model import CustomKlineDataset
 from config_loader import CustomFinetuneConfig
@@ -103,7 +104,8 @@ def create_dataloaders(config):
         seed=config.seed,
         train_ratio=config.train_ratio,
         val_ratio=config.val_ratio,
-        test_ratio=config.test_ratio
+        test_ratio=config.test_ratio,
+        max_samples=config.max_train_samples
     )
     
     val_dataset = CustomKlineDataset(
@@ -115,7 +117,8 @@ def create_dataloaders(config):
         seed=config.seed + 1,
         train_ratio=config.train_ratio,
         val_ratio=config.val_ratio,
-        test_ratio=config.test_ratio
+        test_ratio=config.test_ratio,
+        max_samples=config.max_val_samples
     )
     
     use_ddp = dist.is_available() and dist.is_initialized()

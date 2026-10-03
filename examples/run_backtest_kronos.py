@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import os
 from datetime import datetime, timedelta
 import warnings
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
 
 warnings.filterwarnings('ignore')
 
@@ -418,10 +419,10 @@ def main():
     """
     # 配置参数
     BACKTEST_CONFIG = {
-        "stock_code": "000831",  # 要回测的股票代码
-        "data_dir": r"D:\lianghuajiaoyi\Kronos\examples\data",  # 历史数据目录
-        "model_dir": r"D:\lianghuajiaoyi\Kronos\examples\yuce",  # 模型预测结果目录
-        "output_dir": r"D:\lianghuajiaoyi\Kronos\examples\backtest",  # 回测结果输出目录
+        "stock_code": os.environ.get("KRONOS_STOCK_CODE", "000831"),  # 要回测的股票代码
+        "data_dir": os.path.join(EXAMPLES_DIR, "data"),  # 历史数据目录
+        "model_dir": os.path.join(EXAMPLES_DIR, "yuce"),  # 模型预测结果目录
+        "output_dir": os.path.join(EXAMPLES_DIR, "backtest"),  # 回测结果输出目录
         "initial_capital": 100000,  # 初始资金
         "threshold": 0.02  # 交易阈值（2%）
     }

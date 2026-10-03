@@ -1,7 +1,9 @@
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import sys
-sys.path.append("../")
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(EXAMPLES_DIR))
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 
@@ -39,14 +41,18 @@ def plot_prediction(kline_df, pred_df):
 
 
 # 1. Load Model and Tokenizer
-tokenizer = KronosTokenizer.from_pretrained('/home/csc/huggingface/Kronos-Tokenizer-base/')
-model = Kronos.from_pretrained("/home/csc/huggingface/Kronos-base/")
+tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
+model = Kronos.from_pretrained("NeoQuasar/Kronos-base")
 
 # 2. Instantiate Predictor
-predictor = KronosPredictor(model, tokenizer, device="cuda:0", max_context=512)
+predictor = KronosPredictor(model, tokenizer, device=None, max_context=512)
 
 # 3. Prepare Data
-df = pd.read_csv("./data/XSHG_5min_600977.csv")
+# Uses data/XSHG_5min_600977.csv if present, otherwise the bundled sample in the same 5-min A-share format
+DATA_FILE = os.path.join(os.path.dirname(EXAMPLES_DIR), "data", "XSHG_5min_600977.csv")
+if not os.path.exists(DATA_FILE):
+    DATA_FILE = os.path.join(os.path.dirname(EXAMPLES_DIR), "data", "sample_a_share_5min.csv")
+df = pd.read_csv(DATA_FILE)
 df['timestamps'] = pd.to_datetime(df['timestamps'])
 
 lookback = 400
@@ -70,3 +76,7 @@ pred_df = predictor.predict_batch(
     y_timestamp_list=ytsp,
     pred_len=pred_len,
 )
+
+for i, p in enumerate(pred_df):
+    print(f"Series {i} forecast head:")
+    print(p.head())

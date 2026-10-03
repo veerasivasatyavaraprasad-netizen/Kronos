@@ -9,15 +9,20 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-import comet_ml
+try:
+    import comet_ml
+except ImportError:  # Comet ML logging is optional
+    comet_ml = None
 
 # Ensure project root is in path
-sys.path.append('../')
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import Config
 from dataset import QlibDataset
 from model.kronos import KronosTokenizer, Kronos
 # Import shared utilities
 from utils.training_utils import (
+    get_device,
     setup_ddp,
     cleanup_ddp,
     set_seed,
@@ -182,7 +187,7 @@ def train_model(model, tokenizer, device, config, save_dir, logger, rank, world_
 def main(config: dict):
     """Main function to orchestrate the DDP training process."""
     rank, world_size, local_rank = setup_ddp()
-    device = torch.device(f"cuda:{local_rank}")
+    device = get_device(local_rank)
     set_seed(config['seed'], rank)
 
     save_dir = os.path.join(config['save_path'], config['predictor_save_folder_name'])
@@ -196,7 +201,7 @@ def main(config: dict):
             'save_directory': save_dir,
             'world_size': world_size,
         }
-        if config['use_comet']:
+        if config['use_comet'] and comet_ml is not None:
             comet_logger = comet_ml.Experiment(
                 api_key=config['comet_config']['api_key'],
                 project_name=config['comet_config']['project_name'],
@@ -215,7 +220,7 @@ def main(config: dict):
 
     model = Kronos.from_pretrained(config['pretrained_predictor_path'])
     model.to(device)
-    model = DDP(model, device_ids=[local_rank], find_unused_parameters=False)
+    model = DDP(model, device_ids=[local_rank] if device.type == "cuda" else None, find_unused_parameters=False)
 
     if rank == 0:
         print(f"Predictor Model Size: {get_model_size(model.module)}")

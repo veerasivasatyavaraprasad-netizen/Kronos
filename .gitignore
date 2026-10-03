@@ -77,3 +77,12 @@ tmp/
 
 # Automation outputs
 outputs/
+finetune_csv/finetuned/
+finetune/outputs/
+finetune/data/
+
+# Example script outputs
+examples/data/
+examples/backtest/
+examples/historical_backtest/
+examples/output/

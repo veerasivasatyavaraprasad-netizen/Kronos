@@ -60,6 +60,8 @@ source .venv/bin/activate
 make serve                  # Web UI  -> http://localhost:7070
 make run                    # batch forecast of every symbol in automation/config.yaml
 make test                   # regression + automation tests
+make finetune               # quick fine-tune on the bundled CSV
+make examples               # run the example scripts
 ```
 
 ```bat
@@ -95,6 +97,34 @@ Every run writes to `outputs/<timestamp>/` (copied to `outputs/latest/`):
 - `summary.json` / `summary.md` — last close, forecast close, % change, share of paths ending up, UP/DOWN/FLAT signal, backtest MAPE and direction hit
 
 Edit `automation/config.yaml` to choose the model (`kronos-mini` / `kronos-small` / `kronos-base`), device, lookback, horizon and the symbols to track. Live symbols (BTC, AAPL, S&P 500) are included but `enabled: false`; set `enabled: true` once you have internet access to the data providers. Any CSV with `timestamps, open, high, low, close[, volume, amount]` columns dropped into `data/` is usable from both the CLI and the web UI.
+
+### Fine-tuning on your own data
+
+```bash
+make finetune                 # quick CPU smoke run on the bundled Alibaba 5-min CSV (~1 min)
+make finetune-full GPUS=2     # full run with finetune_csv/configs/config_ali09988_candle-5min.yaml
+python -m automation.kronos_auto finetune --config path/to/your_config.yaml
+```
+
+Copy `finetune_csv/configs/config_quick_cpu.yaml`, point `data_path` at your CSV (paths are relative to the repo root; pretrained models can be Hugging Face ids) and remove the `max_*_samples` caps for a real run. Fine-tuned models are saved under `finetune_csv/finetuned/<exp_name>/`, show up automatically in the web UI's model list, and can be used for batch forecasts by setting `model_path` / `tokenizer_path` in `automation/config.yaml`.
+
+**Qlib A-share pipeline** (`finetune/`): `make qlib-pipeline` (or `./finetune/run_pipeline.sh`) installs `pyqlib`, downloads the Qlib CN dataset, preprocesses it, fine-tunes tokenizer + predictor with `torchrun` (NCCL on GPUs, gloo on CPU) and runs the top-K backtest. Settings are in `finetune/config.py` and can be overridden with env vars (`QLIB_DATA_PATH`, `KRONOS_FT_EPOCHS`, `KRONOS_FT_BATCH_SIZE`, `KRONOS_FT_INSTRUMENT`, ...). Pretrained models default to the Hugging Face releases; Comet ML logging turns on when `COMET_API_KEY` is set.
+
+### Example scripts
+
+`make examples` runs `examples/prediction_example.py`, `prediction_wo_vol_example.py` and `prediction_batch_example.py` from any directory, using `data/XSHG_5min_600977.csv` if you add it, otherwise the bundled sample; charts are saved to `outputs/`.
+
+The Chinese A-share scripts need `pip install -r requirements-cn.txt` and access to AkShare/East Money/Baostock. They read and write under `examples/` (`examples/data`, `examples/yuce`, ...) and use the GPU automatically when present. Pick the stock with an env var instead of editing code:
+
+```bash
+KRONOS_STOCK_CODE=600519 python examples/get_akshare_date_2024-2025_x.py   # download -> examples/data/600519_stock_data.csv
+KRONOS_STOCK_CODE=600519 python examples/prediction_akshare_2024-2025.py    # forecast -> examples/yuce/
+KRONOS_STOCK_CODE=600519 python examples/prediction_new.py                  # forecast + market-factor analysis
+KRONOS_STOCK_CODE=600519 python examples/yuce/historical_backtest.py        # rolling Kronos backtest vs buy & hold
+python examples/prediction_new_GUI.py                                        # Tkinter desktop GUI
+```
+
+If every data source fails, the download scripts stop instead of saving made-up prices; set `KRONOS_ALLOW_SAMPLE_DATA=1` to generate clearly-labelled simulated data for demos. `historical_backtest.py` now uses Kronos itself (`KRONOS_BACKTEST_BASELINE=1` switches back to the random-walk baseline for comparison).
 
 ### CI / scheduled runs (GitHub Actions)
 

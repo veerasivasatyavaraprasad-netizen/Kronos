@@ -21,7 +21,8 @@ import matplotlib.ticker as ticker
 warnings.filterwarnings('ignore')
 
 # 添加项目路径以便导入自定义模块
-sys.path.append("../")
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(EXAMPLES_DIR))
 try:
     from model import Kronos, KronosTokenizer, KronosPredictor
 except ImportError:
@@ -49,10 +50,10 @@ class StockPredictorGUI:
 
         # 默认配置
         self.default_config = {
-            "stock_code": "600580",
+            "stock_code": os.environ.get("KRONOS_STOCK_CODE", "600580"),
             "stock_name": "卧龙电驱",
-            "data_dir": r"D:\lianghuajiaoyi\Kronos\examples\data",
-            "output_dir": r"D:\lianghuajiaoyi\Kronos\examples\yuce",
+            "data_dir": os.path.join(EXAMPLES_DIR, "data"),
+            "output_dir": os.path.join(EXAMPLES_DIR, "yuce"),
             "pred_days": 60,
             "history_years": 1
         }
@@ -124,7 +125,7 @@ class StockPredictorGUI:
         # 数据目录
         tk.Label(dir_frame, text="数据目录:", bg='#f0f0f0', font=("Arial", 10)).grid(row=0, column=0, sticky=tk.W,
                                                                                      padx=5, pady=5)
-        self.data_dir_var = tk.StringVar(value=r"D:\lianghuajiaoyi\Kronos\examples\data")
+        self.data_dir_var = tk.StringVar(value=os.path.join(EXAMPLES_DIR, "data"))
         data_dir_entry = tk.Entry(dir_frame, textvariable=self.data_dir_var, font=("Arial", 10), width=40)
         data_dir_entry.grid(row=0, column=1, padx=5, pady=5)
         tk.Button(dir_frame, text="浏览", command=self.browse_data_dir, font=("Arial", 9)).grid(row=0, column=2, padx=5,
@@ -133,7 +134,7 @@ class StockPredictorGUI:
         # 输出目录
         tk.Label(dir_frame, text="输出目录:", bg='#f0f0f0', font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W,
                                                                                      padx=5, pady=5)
-        self.output_dir_var = tk.StringVar(value=r"D:\lianghuajiaoyi\Kronos\examples\yuce")
+        self.output_dir_var = tk.StringVar(value=os.path.join(EXAMPLES_DIR, "yuce"))
         output_dir_entry = tk.Entry(dir_frame, textvariable=self.output_dir_var, font=("Arial", 10), width=40)
         output_dir_entry.grid(row=1, column=1, padx=5, pady=5)
         tk.Button(dir_frame, text="浏览", command=self.browse_output_dir, font=("Arial", 9)).grid(row=1, column=2,
@@ -225,8 +226,8 @@ class StockPredictorGUI:
         self.stock_name_var.set("卧龙电驱")
         self.pred_days_var.set("60")
         self.history_years_var.set("1")
-        self.data_dir_var.set(r"D:\lianghuajiaoyi\Kronos\examples\data")
-        self.output_dir_var.set(r"D:\lianghuajiaoyi\Kronos\examples\yuce")
+        self.data_dir_var.set(os.path.join(EXAMPLES_DIR, "data"))
+        self.output_dir_var.set(os.path.join(EXAMPLES_DIR, "yuce"))
         self.result_text.delete(1.0, tk.END)
         self.progress_var.set("等待开始预测...")
 
@@ -1181,7 +1182,7 @@ def run_comprehensive_prediction_gui(stock_code, stock_name, data_dir, pred_days
 
         # 3. 实例化预测器
         update_progress("步骤3: 初始化预测器...")
-        predictor = KronosPredictor(model, tokenizer, device="cuda:0", max_context=512)
+        predictor = KronosPredictor(model, tokenizer, device=None, max_context=512)
         update_progress("✅ 预测器初始化完成")
 
         # 4. 准备数据
@@ -1200,8 +1201,8 @@ def run_comprehensive_prediction_gui(stock_code, stock_name, data_dir, pred_days
 
         # 6. 准备输入数据
         update_progress("步骤6: 准备输入数据...")
-        x_df = df.loc[-lookback:, ['open', 'high', 'low', 'close', 'volume', 'amount']].reset_index(drop=True)
-        x_timestamp = df.loc[-lookback:, 'timestamps'].reset_index(drop=True)
+        x_df = df.iloc[-lookback:][['open', 'high', 'low', 'close', 'volume', 'amount']].reset_index(drop=True)
+        x_timestamp = df.iloc[-lookback:]['timestamps'].reset_index(drop=True)
 
         # 生成未来日期 - 🎯 修复：只生成交易日
         last_historical_date = df['timestamps'].iloc[-1]
@@ -1233,7 +1234,7 @@ def run_comprehensive_prediction_gui(stock_code, stock_name, data_dir, pred_days
 
         # 🎯 新增：对基础预测进行合理性检查
         update_progress("步骤7.2: 验证预测结果合理性...")
-        historical_df_for_validation = df.loc[-lookback:].reset_index(drop=True)
+        historical_df_for_validation = df.iloc[-lookback:].reset_index(drop=True)
         validated_pred_df = validate_prediction_results(historical_df_for_validation, pred_df)
 
         # 🎯 新增：对基础预测进行平滑处理
@@ -1255,7 +1256,7 @@ def run_comprehensive_prediction_gui(stock_code, stock_name, data_dir, pred_days
         # 8. 使用多维度市场因素增强预测
         update_progress("步骤8: 应用多维度市场因素增强预测...")
         enhanced_pred_df, enhancement_info = enhance_prediction_with_market_factors(
-            df.loc[-lookback:].reset_index(drop=True),
+            df.iloc[-lookback:].reset_index(drop=True),
             adjusted_pred_df,  # 使用平滑调整后的预测结果
             stock_code,
             market_analyzer
@@ -1270,7 +1271,7 @@ def run_comprehensive_prediction_gui(stock_code, stock_name, data_dir, pred_days
 
         # 10. 生成预测图表
         update_progress("步骤10: 生成预测图表...")
-        historical_df = df.loc[-lookback:].reset_index(drop=True)
+        historical_df = df.iloc[-lookback:].reset_index(drop=True)
         chart_path = plot_optimized_prediction_gui(
             historical_df, adjusted_pred_df, enhanced_pred_df, future_dates,
             stock_code, stock_name, output_dir, enhancement_info

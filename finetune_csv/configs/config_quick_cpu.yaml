@@ -1,0 +1,51 @@
+# Quick smoke-test fine-tune that finishes in a few minutes on a CPU.
+# It proves the pipeline works end to end; use config_ali09988_candle-5min.yaml (GPU) for a real run.
+#   python -m automation.kronos_auto finetune --config finetune_csv/configs/config_quick_cpu.yaml
+
+data:
+  data_path: "finetune_csv/data/HK_ali_09988_kline_5min_all.csv"
+  lookback_window: 256
+  predict_window: 24
+  max_context: 512
+  clip: 5.0
+  train_ratio: 0.9
+  val_ratio: 0.1
+  test_ratio: 0.0
+  max_train_samples: 64      # cap samples per epoch (remove for a full run)
+  max_val_samples: 16
+
+training:
+  tokenizer_epochs: 1
+  basemodel_epochs: 1
+  batch_size: 8
+  log_interval: 2
+  num_workers: 0
+  seed: 42
+  tokenizer_learning_rate: 0.0002
+  predictor_learning_rate: 0.000001
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_weight_decay: 0.1
+  accumulation_steps: 1
+
+model_paths:
+  pretrained_tokenizer: "NeoQuasar/Kronos-Tokenizer-base"
+  pretrained_predictor: "NeoQuasar/Kronos-small"
+  exp_name: "quick_cpu_ali09988"
+  base_path: "finetune_csv/finetuned"
+  base_save_path: ""
+  finetuned_tokenizer: ""
+  tokenizer_save_name: "tokenizer"
+  basemodel_save_name: "basemodel"
+
+experiment:
+  name: "kronos_quick_cpu_finetune"
+  description: "Smoke-test finetune on bundled Alibaba HK 5-min data"
+  use_comet: false
+  train_tokenizer: true
+  train_basemodel: true
+  skip_existing: false
+
+device:
+  use_cuda: true             # falls back to CPU automatically when no GPU is present
+  device_id: 0

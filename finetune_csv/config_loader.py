@@ -127,6 +127,8 @@ class CustomFinetuneConfig:
         self.train_ratio = data_config.get('train_ratio', 0.9)
         self.val_ratio = data_config.get('val_ratio', 0.1)
         self.test_ratio = data_config.get('test_ratio', 0.0)
+        self.max_train_samples = data_config.get('max_train_samples')
+        self.max_val_samples = data_config.get('max_val_samples')
         
         # training configuration
         training_config = self.loader.get_training_config()
@@ -179,7 +181,27 @@ class CustomFinetuneConfig:
         self.use_ddp = distributed_config.get('use_ddp', False)
         self.ddp_backend = distributed_config.get('backend', 'nccl')
         
+        self._resolve_relative_paths()
         self._compute_full_paths()
+
+    def _resolve_relative_paths(self):
+        # Relative paths in the YAML are relative to the repository root, so configs work on any machine.
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        def resolve(p, maybe_hub_id=False):
+            if not p or os.path.isabs(p):
+                return p
+            local = os.path.join(repo_root, p)
+            # "NeoQuasar/Kronos-small" style values are Hugging Face Hub ids unless a local folder exists
+            if maybe_hub_id and not p.startswith('.') and not os.path.exists(local):
+                return p
+            return os.path.normpath(local)
+
+        self.data_path = resolve(self.data_path)
+        self.base_save_path = resolve(self.base_save_path)
+        self.finetuned_tokenizer_path = resolve(self.finetuned_tokenizer_path)
+        self.pretrained_tokenizer_path = resolve(self.pretrained_tokenizer_path, maybe_hub_id=True)
+        self.pretrained_predictor_path = resolve(self.pretrained_predictor_path, maybe_hub_id=True)
     
     def _compute_full_paths(self):
 

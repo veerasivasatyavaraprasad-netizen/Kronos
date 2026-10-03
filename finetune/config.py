@@ -1,5 +1,13 @@
 import os
 
+# Relative paths below are resolved against this folder so scripts work from any directory.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _env(name, default):
+    """Every setting marked with an env var can be overridden without editing this file."""
+    return os.environ.get(name, default)
+
 class Config:
     """
     Configuration class for the entire project.
@@ -10,8 +18,8 @@ class Config:
         # Data & Feature Parameters
         # =================================================================
         # TODO: Update this path to your Qlib data directory.
-        self.qlib_data_path = "~/.qlib/qlib_data/cn_data"
-        self.instrument = 'csi300'
+        self.qlib_data_path = _env("QLIB_DATA_PATH", "~/.qlib/qlib_data/cn_data")
+        self.instrument = _env("KRONOS_FT_INSTRUMENT", 'csi300')
 
         # Overall time range for data loading from Qlib.
         self.dataset_begin_time = "2011-01-01"
@@ -38,21 +46,21 @@ class Config:
         self.backtest_time_range = ["2024-07-01", "2025-06-05"]
 
         # TODO: Directory to save the processed, pickled datasets.
-        self.dataset_path = "./data/processed_datasets"
+        self.dataset_path = os.path.join(_HERE, _env("KRONOS_FT_DATASET_PATH", "./data/processed_datasets"))
 
         # =================================================================
         # Training Hyperparameters
         # =================================================================
         self.clip = 5.0  # Clipping value for normalized data to prevent outliers.
 
-        self.epochs = 30
+        self.epochs = int(_env("KRONOS_FT_EPOCHS", 30))
         self.log_interval = 100  # Log training status every N batches.
-        self.batch_size = 50  # Batch size per GPU.
+        self.batch_size = int(_env("KRONOS_FT_BATCH_SIZE", 50))  # Batch size per GPU.
 
         # Number of samples to draw for one "epoch" of training/validation.
         # This is useful for large datasets where a true epoch is too long.
-        self.n_train_iter = 2000 * self.batch_size
-        self.n_val_iter = 400 * self.batch_size
+        self.n_train_iter = int(_env("KRONOS_FT_TRAIN_ITER", 2000 * self.batch_size))
+        self.n_val_iter = int(_env("KRONOS_FT_VAL_ITER", 400 * self.batch_size))
 
         # Learning rates for different model components.
         self.tokenizer_learning_rate = 2e-4
@@ -72,34 +80,34 @@ class Config:
         # =================================================================
         # Experiment Logging & Saving
         # =================================================================
-        self.use_comet = True # Set to False if you don't want to use Comet ML
+        self.use_comet = bool(os.getenv("COMET_API_KEY"))  # enabled automatically when COMET_API_KEY is set
         self.comet_config = {
             # It is highly recommended to load secrets from environment variables
             # for security purposes. Example: os.getenv("COMET_API_KEY")
-            "api_key": "YOUR_COMET_API_KEY",
+            "api_key": os.getenv("COMET_API_KEY", ""),
             "project_name": "Kronos-Finetune-Demo",
-            "workspace": "your_comet_workspace" # TODO: Change to your Comet ML workspace name
+            "workspace": os.getenv("COMET_WORKSPACE", "")
         }
         self.comet_tag = 'finetune_demo'
         self.comet_name = 'finetune_demo'
 
         # Base directory for saving model checkpoints and results.
         # Using a general 'outputs' directory is a common practice.
-        self.save_path = "./outputs/models"
+        self.save_path = os.path.join(_HERE, _env("KRONOS_FT_SAVE_PATH", "./outputs/models"))
         self.tokenizer_save_folder_name = 'finetune_tokenizer_demo'
         self.predictor_save_folder_name = 'finetune_predictor_demo'
         self.backtest_save_folder_name = 'finetune_backtest_demo'
 
         # Path for backtesting results.
-        self.backtest_result_path = "./outputs/backtest_results"
+        self.backtest_result_path = os.path.join(_HERE, _env("KRONOS_FT_BACKTEST_PATH", "./outputs/backtest_results"))
 
         # =================================================================
         # Model & Checkpoint Paths
         # =================================================================
         # TODO: Update these paths to your pretrained model locations.
         # These can be local paths or Hugging Face Hub model identifiers.
-        self.pretrained_tokenizer_path = "path/to/your/Kronos-Tokenizer-base"
-        self.pretrained_predictor_path = "path/to/your/Kronos-small"
+        self.pretrained_tokenizer_path = _env("KRONOS_FT_PRETRAINED_TOKENIZER", "NeoQuasar/Kronos-Tokenizer-base")
+        self.pretrained_predictor_path = _env("KRONOS_FT_PRETRAINED_PREDICTOR", "NeoQuasar/Kronos-small")
 
         # Paths to the fine-tuned models, derived from the save_path.
         # These will be generated automatically during training.

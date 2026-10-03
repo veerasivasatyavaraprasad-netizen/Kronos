@@ -20,7 +20,8 @@ from qlib.utils import flatten_dict
 from qlib.utils.time import Freq
 
 # Ensure project root is in the Python path
-sys.path.append("../")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import Config
 from model.kronos import Kronos, KronosTokenizer, auto_regressive_inference
 
@@ -302,7 +303,7 @@ def generate_predictions(config: dict, test_data: dict) -> dict[str, pd.DataFram
 def main():
     """Main function to set up config, run inference, and execute backtesting."""
     parser = argparse.ArgumentParser(description="Run Kronos Inference and Backtesting")
-    parser.add_argument("--device", type=str, default="cuda:1", help="Device for inference (e.g., 'cuda:0', 'cpu')")
+    parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu", help="Device for inference (e.g., 'cuda:0', 'cpu')")
     args = parser.parse_args()
 
     # --- 1. Configuration Setup ---

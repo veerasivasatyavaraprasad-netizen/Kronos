@@ -3,6 +3,9 @@
 # writes CSV / PNG / JSON / Markdown reports to `output_dir`.
 
 model: kronos-small          # kronos-mini | kronos-small | kronos-base
+# To forecast with a fine-tuned model (see `kronos_auto finetune`), uncomment:
+# model_path: finetune_csv/finetuned/quick_cpu_ali09988/basemodel/best_model
+# tokenizer_path: finetune_csv/finetuned/quick_cpu_ali09988/tokenizer/best_model
 device: auto                 # auto | cpu | cuda:0 | mps
 output_dir: outputs
 

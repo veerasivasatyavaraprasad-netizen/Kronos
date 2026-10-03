@@ -28,7 +28,8 @@ import pandas as pd
 import akshare as ak
 import matplotlib.pyplot as plt
 import sys
-sys.path.append("../")
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(EXAMPLES_DIR))
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 save_dir = "./outputs"

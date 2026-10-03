@@ -68,3 +68,13 @@ def test_fetch_yfinance_parses_multiindex(monkeypatch):
     monkeypatch.setitem(__import__("sys").modules, "yfinance", types.SimpleNamespace(download=lambda *a, **k: raw))
     df = data_sources.fetch_yfinance("AAPL")
     assert len(df) == 3 and df["timestamps"].dt.tz is None
+
+
+def test_finetune_csv_config_resolves_paths():
+    from finetune_csv.config_loader import CustomFinetuneConfig
+
+    conf = CustomFinetuneConfig(str(ROOT / "finetune_csv" / "configs" / "config_quick_cpu.yaml"))
+    assert Path(conf.data_path).is_file()
+    assert conf.pretrained_predictor_path == "NeoQuasar/Kronos-small"  # Hub id left untouched
+    assert Path(conf.basemodel_best_model_path).is_relative_to(ROOT / "finetune_csv" / "finetuned")
+    assert conf.max_train_samples == 64
