@@ -1,0 +1,44 @@
+name: Scheduled forecast
+
+on:
+  schedule:
+    - cron: "17 1 * * *"   # daily at 01:17 UTC
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Space-separated symbol names from automation/config.yaml (blank = default list)"
+        required: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-app.txt
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-v1
+      - name: Run forecasts
+        env:
+          SYMBOLS: ${{ github.event.inputs.symbols }}
+        run: |
+          if [ -z "$SYMBOLS" ]; then SYMBOLS="SAMPLE_A_SHARE_5MIN BTCUSDT_1H AAPL_1D SPX_1D"; fi
+          python -m automation.kronos_auto run --only $SYMBOLS
+      - name: Job summary
+        if: always()
+        run: cat outputs/latest/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forecast-${{ github.run_id }}
+          path: outputs/latest
+          retention-days: 30

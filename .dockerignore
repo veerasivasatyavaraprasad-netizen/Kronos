@@ -1,0 +1,9 @@
+.git
+.venv
+outputs
+figures
+examples
+finetune
+finetune_csv
+**/__pycache__
+webui/prediction_results

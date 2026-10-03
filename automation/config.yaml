@@ -1,0 +1,43 @@
+# Kronos automation config.
+# `python -m automation.kronos_auto run` forecasts every enabled symbol below and
+# writes CSV / PNG / JSON / Markdown reports to `output_dir`.
+
+model: kronos-small          # kronos-mini | kronos-small | kronos-base
+device: auto                 # auto | cpu | cuda:0 | mps
+output_dir: outputs
+
+defaults:
+  lookback: 400              # history bars fed to the model (<= 512 for small/base, <= 2048 for mini)
+  pred_len: 24               # bars to forecast
+  temperature: 1.0
+  top_p: 0.9
+  sample_count: 5            # forecast paths; mean is reported, spread gives the band in the chart
+  seed: 42
+
+symbols:
+  # --- Offline sample data shipped with the repo (always works) ---
+  - name: SAMPLE_A_SHARE_5MIN
+    source: csv
+    path: data/sample_a_share_5min.csv
+
+  # --- Live data (needs internet access to Yahoo Finance / Binance) ---
+  - name: BTCUSDT_1H
+    source: binance
+    symbol: BTCUSDT
+    interval: 1h
+    limit: 1000
+    enabled: false
+
+  - name: AAPL_1D
+    source: yfinance
+    symbol: AAPL
+    interval: 1d
+    period: 3y
+    enabled: false
+
+  - name: SPX_1D
+    source: yfinance
+    symbol: ^GSPC
+    interval: 1d
+    period: 3y
+    enabled: false

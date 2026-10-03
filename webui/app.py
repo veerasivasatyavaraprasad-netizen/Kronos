@@ -57,13 +57,27 @@ AVAILABLE_MODELS = {
     }
 }
 
+DATA_DIR = os.path.abspath(os.environ.get(
+    'KRONOS_DATA_DIR',
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')))
+os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def resolve_data_path(file_path):
+    """Only allow files inside DATA_DIR to be read through the API"""
+    if not file_path:
+        return None
+    full = os.path.abspath(os.path.join(DATA_DIR, os.path.basename(file_path)))
+    return full if os.path.isfile(full) else None
+
+
 def load_data_files():
     """Scan data directory and return available data files"""
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+    data_dir = DATA_DIR
     data_files = []
     
     if os.path.exists(data_dir):
-        for file in os.listdir(data_dir):
+        for file in sorted(os.listdir(data_dir)):
             if file.endswith(('.csv', '.feather')):
                 file_path = os.path.join(data_dir, file)
                 file_size = os.path.getsize(file_path)
@@ -79,7 +93,8 @@ def load_data_file(file_path):
     """Load data file"""
     try:
         if file_path.endswith('.csv'):
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(file_path, encoding='utf-8-sig')
+            df.columns = [str(c).strip().lower() for c in df.columns]
         elif file_path.endswith('.feather'):
             df = pd.read_feather(file_path)
         else:
@@ -100,7 +115,7 @@ def load_data_file(file_path):
             df['timestamps'] = pd.to_datetime(df['date'])
         else:
             # If no timestamp column exists, create one
-            df['timestamps'] = pd.date_range(start='2024-01-01', periods=len(df), freq='1H')
+            df['timestamps'] = pd.date_range(start='2024-01-01', periods=len(df), freq='1h')
         
         # Ensure numeric columns are numeric type
         for col in ['open', 'high', 'low', 'close']:
@@ -116,6 +131,7 @@ def load_data_file(file_path):
         
         # Remove rows containing NaN values
         df = df.dropna()
+        df = df.sort_values('timestamps').reset_index(drop=True)
         
         return df, None
         
@@ -343,10 +359,10 @@ def load_data():
     """Load data file"""
     try:
         data = request.get_json()
-        file_path = data.get('file_path')
+        file_path = resolve_data_path(data.get('file_path'))
         
         if not file_path:
-            return jsonify({'error': 'File path cannot be empty'}), 400
+            return jsonify({'error': 'File not found in data directory'}), 400
         
         df, error = load_data_file(file_path)
         if error:
@@ -406,7 +422,9 @@ def predict():
     """Perform prediction"""
     try:
         data = request.get_json()
-        file_path = data.get('file_path')
+        file_path = resolve_data_path(data.get('file_path'))
+        if not file_path:
+            return jsonify({'error': 'File not found in data directory'}), 400
         lookback = int(data.get('lookback', 400))
         pred_len = int(data.get('pred_len', 120))
         
@@ -705,4 +723,6 @@ if __name__ == '__main__':
     else:
         print("Tip: Will use simulated data for demonstration")
     
-    app.run(debug=True, host='0.0.0.0', port=7070)
+    app.run(debug=os.environ.get('FLASK_DEBUG') == '1',
+            host=os.environ.get('KRONOS_HOST', '0.0.0.0'),
+            port=int(os.environ.get('KRONOS_PORT', '7070')))

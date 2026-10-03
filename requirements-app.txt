@@ -1,0 +1,9 @@
+# Everything needed to run the full app (model + automation + web UI).
+-r requirements.txt
+flask==2.3.3
+flask-cors==4.0.0
+plotly==5.17.0
+pyyaml>=6.0
+requests>=2.31
+yfinance>=0.2.40
+pytest>=7.0

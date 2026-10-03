@@ -1,0 +1,38 @@
+services:
+  web:
+    build: .
+    image: kronos-app
+    ports:
+      - "7070:7070"
+    volumes:
+      - ./data:/app/data
+      - hf-cache:/models
+    restart: unless-stopped
+
+  # One-shot batch forecast: `docker compose run --rm forecaster`
+  forecaster:
+    image: kronos-app
+    build: .
+    command: ["python", "-m", "automation.kronos_auto", "run"]
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./automation/config.yaml:/app/automation/config.yaml:ro
+      - hf-cache:/models
+    profiles: ["batch"]
+
+  # Repeats the batch forecast every hour: `docker compose --profile schedule up -d`
+  scheduler:
+    image: kronos-app
+    build: .
+    command: ["python", "-m", "automation.kronos_auto", "run", "--every", "60"]
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./automation/config.yaml:/app/automation/config.yaml:ro
+      - hf-cache:/models
+    restart: unless-stopped
+    profiles: ["schedule"]
+
+volumes:
+  hf-cache:

@@ -49,6 +49,60 @@
 
 </div>
 
+## ⚡ Automated App — Quick Start
+
+This repo is set up as a ready-to-run app: one command installs everything, downloads the models and runs a test forecast.
+
+```bash
+# Linux / macOS
+./scripts/setup.sh          # venv + deps + model download + smoke-test forecast
+source .venv/bin/activate
+make serve                  # Web UI  -> http://localhost:7070
+make run                    # batch forecast of every symbol in automation/config.yaml
+make test                   # regression + automation tests
+```
+
+```bat
+:: Windows
+scripts\setup.bat
+scripts\start.bat           :: Web UI -> http://localhost:7070
+```
+
+```bash
+# Docker
+docker compose up -d web                       # Web UI on :7070
+docker compose run --rm forecaster             # one batch forecast -> ./outputs/latest
+docker compose --profile schedule up -d        # re-forecast every hour
+```
+
+### Automation CLI
+
+| Command | What it does |
+|---|---|
+| `python -m automation.kronos_auto fetch --source yfinance --symbol AAPL --interval 1d --period 3y` | Download K-lines into `data/` (Yahoo Finance: stocks, indices, FX, crypto) |
+| `python -m automation.kronos_auto fetch --source binance --symbol BTCUSDT --interval 1h --limit 1000` | Download crypto K-lines from Binance (falls back to binance.us) |
+| `python -m automation.kronos_auto forecast --csv data/AAPL_1d.csv --pred-len 20` | Forecast one CSV |
+| `python -m automation.kronos_auto run` | Forecast every enabled symbol in `automation/config.yaml` |
+| `python -m automation.kronos_auto run --every 60` | Same, repeating every 60 minutes |
+| `python -m automation.kronos_auto setup-models --all` | Pre-download all model weights |
+| `python -m automation.kronos_auto serve --port 7070` | Start the web UI |
+
+Every run writes to `outputs/<timestamp>/` (copied to `outputs/latest/`):
+
+- `<SYMBOL>_forecast.csv` — mean forecast (OHLCV + amount) for the next `pred_len` bars
+- `<SYMBOL>_forecast.png` — history + forecast + 10–90% band across `sample_count` sampled paths
+- `<SYMBOL>_backtest.png` — the same model run on the most recent hidden window vs. what actually happened
+- `summary.json` / `summary.md` — last close, forecast close, % change, share of paths ending up, UP/DOWN/FLAT signal, backtest MAPE and direction hit
+
+Edit `automation/config.yaml` to choose the model (`kronos-mini` / `kronos-small` / `kronos-base`), device, lookback, horizon and the symbols to track. Live symbols (BTC, AAPL, S&P 500) are included but `enabled: false`; set `enabled: true` once you have internet access to the data providers. Any CSV with `timestamps, open, high, low, close[, volume, amount]` columns dropped into `data/` is usable from both the CLI and the web UI.
+
+### CI / scheduled runs (GitHub Actions)
+
+- `.github/workflows/ci.yml` — runs the tests and a smoke forecast on every push / PR.
+- `.github/workflows/scheduled-forecast.yml` — daily (01:17 UTC) or manual run that forecasts the configured symbols, posts the report as the job summary and uploads charts/CSVs as a build artifact.
+
+> Forecasts are model outputs for research purposes, not financial advice.
+
 ## 📰 News
 *   🚩 **[2025.11.10]** Kronos has been accpeted by AAAI 2026.
 *   🚩 **[2025.08.17]** We have released the scripts for fine-tuning! Check them out to adapt Kronos to your own tasks.
