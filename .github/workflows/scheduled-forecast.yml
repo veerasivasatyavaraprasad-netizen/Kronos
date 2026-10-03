@@ -30,6 +30,19 @@ jobs:
       - name: Run forecasts
         env:
           SYMBOLS: ${{ github.event.inputs.symbols }}
+          # Alerts are sent only for channels whose secrets exist (Settings -> Secrets and variables -> Actions)
+          # and when `alerts.enabled: true` in automation/config.yaml.
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
         run: |
           if [ -z "$SYMBOLS" ]; then SYMBOLS="SAMPLE_A_SHARE_5MIN BTCUSDT_1H AAPL_1D SPX_1D"; fi
           python -m automation.kronos_auto run --only $SYMBOLS

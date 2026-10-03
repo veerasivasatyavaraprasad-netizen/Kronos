@@ -4,6 +4,9 @@ services:
     image: kronos-app
     ports:
       - "7070:7070"
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./data:/app/data
       - hf-cache:/models
@@ -14,6 +17,9 @@ services:
     image: kronos-app
     build: .
     command: ["python", "-m", "automation.kronos_auto", "run"]
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./data:/app/data
       - ./outputs:/app/outputs
@@ -26,6 +32,9 @@ services:
     image: kronos-app
     build: .
     command: ["python", "-m", "automation.kronos_auto", "run", "--every", "60"]
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./data:/app/data
       - ./outputs:/app/outputs

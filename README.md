@@ -88,6 +88,8 @@ docker compose --profile schedule up -d        # re-forecast every hour
 | `python -m automation.kronos_auto run --every 60` | Same, repeating every 60 minutes |
 | `python -m automation.kronos_auto setup-models --all` | Pre-download all model weights |
 | `python -m automation.kronos_auto serve --port 7070` | Start the web UI |
+| `python -m automation.kronos_auto alert-test` | Send a test alert to every configured channel |
+| `python -m automation.kronos_auto account` | Show the auto-trading account and recent trades |
 
 Every run writes to `outputs/<timestamp>/` (copied to `outputs/latest/`):
 
@@ -97,6 +99,51 @@ Every run writes to `outputs/<timestamp>/` (copied to `outputs/latest/`):
 - `summary.json` / `summary.md` — last close, forecast close, % change, share of paths ending up, UP/DOWN/FLAT signal, backtest MAPE and direction hit
 
 Edit `automation/config.yaml` to choose the model (`kronos-mini` / `kronos-small` / `kronos-base`), device, lookback, horizon and the symbols to track. Live symbols (BTC, AAPL, S&P 500) are included but `enabled: false`; set `enabled: true` once you have internet access to the data providers. Any CSV with `timestamps, open, high, low, close[, volume, amount]` columns dropped into `data/` is usable from both the CLI and the web UI.
+
+### Alerts (Telegram, email, Discord, Slack)
+
+Copy `.env.example` to `.env` and fill in the channels you use, then set `alerts.enabled: true` in
+`automation/config.yaml`. Every `run` then sends a summary (signal, % change, share of paths up,
+backtest error, any orders) plus the forecast charts. Filter with `only_signals: [UP, DOWN]` or
+`min_abs_change_pct`. Check the setup with:
+
+```bash
+python -m automation.kronos_auto alert-test
+```
+
+- **Telegram:** create a bot with @BotFather → `TELEGRAM_BOT_TOKEN`; message the bot, then get your chat id from `https://api.telegram.org/bot<token>/getUpdates` → `TELEGRAM_CHAT_ID`.
+- **Email:** any SMTP account (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `ALERT_EMAIL_TO`). For Gmail use an App Password.
+- **Discord / Slack:** create an incoming webhook in the channel settings → `DISCORD_WEBHOOK_URL` / `SLACK_WEBHOOK_URL` (Slack gets text only; charts can't be attached to Slack webhooks).
+
+### Auto-trading (paper by default)
+
+Set `trading.enabled: true` and give the symbols you want traded a `trade_symbol`. Each run then:
+buys `order_notional` when the forecast change is at least `buy_threshold_pct` **and** at least
+`min_paths_agree_pct` of the sampled paths agree; closes the position when the forecast is at or below
+`sell_threshold_pct` with the same agreement. It is long-only, capped by `max_position_notional` and
+`max_orders_per_run`, skips stale data (`max_data_age_hours`), and logs every order to `outputs/trades.csv`.
+
+| `broker` | What happens |
+|---|---|
+| `paper` (default) | Simulated account in `outputs/paper_account.json`; no API, no money |
+| `alpaca` | Orders on your Alpaca **paper** account (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY`) |
+| `alpaca` + `live: true` + env `KRONOS_ALLOW_LIVE_TRADING=yes` | **Real money.** Both switches are required |
+
+Use `dry_run: true` to see decisions without placing orders, and
+`python -m automation.kronos_auto account` to view the account and recent trades.
+
+> ⚠️ Kronos forecasts are noisy. Backtest results (`Backtest MAPE`, `Direction ok` in each report)
+> on a single window say little about future profits. Run on paper for a long time before risking money;
+> you are responsible for any trades.
+
+### Login and hosting
+
+Set `KRONOS_USERS=you:password` and `KRONOS_SECRET_KEY` (see `.env.example`) to require a sign-in
+for the web UI; without them the UI is open, which is fine on your own computer only. The UI also
+lets signed-in users upload their own CSV files.
+
+Ready-made deployments — any VPS with automatic HTTPS, Hugging Face Spaces (free), Render, and
+Railway — are described step by step in [deploy/README.md](deploy/README.md).
 
 ### Fine-tuning on your own data
 

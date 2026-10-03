@@ -439,6 +439,11 @@
     </style>
 </head>
 <body>
+    {% if current_user %}
+    <div style="position:fixed;top:10px;right:16px;z-index:1000;font-size:14px;background:rgba(255,255,255,.9);padding:6px 12px;border-radius:6px;">
+        {{ current_user }} · <a href="/logout">Log out</a>
+    </div>
+    {% endif %}
     <div class="container">
         <div class="header">
             <h1>🚀 Kronos Financial Prediction Web UI</h1>
@@ -488,6 +493,12 @@
                         <option value="">Please load data file list first</option>
                     </select>
                     <small class="form-text">Select K-line data file from data directory</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="upload-file-input">Or upload your own CSV:</label>
+                    <input type="file" id="upload-file-input" accept=".csv,.feather">
+                    <small class="form-text">Columns: timestamps, open, high, low, close (volume, amount optional)</small>
                 </div>
 
                 <button id="load-data-btn" class="btn btn-secondary">
@@ -747,6 +758,21 @@
                 }
             } catch (error) {
                 console.error('❌ Failed to get model status:', error);
+            }
+        }
+
+        // Upload a data file into the server's data directory, then select it
+        async function uploadDataFile(file) {
+            const form = new FormData();
+            form.append('file', file);
+            try {
+                showStatus('info', `Uploading ${file.name}...`);
+                const response = await axios.post('/api/upload-data', form);
+                await loadDataFiles();
+                document.getElementById('data-file-select').value = response.data.name;
+                showStatus('success', response.data.message);
+            } catch (error) {
+                showStatus('error', error.response?.data?.error || 'Upload failed');
             }
         }
 
@@ -1193,6 +1219,12 @@
             
             // Load data button
             document.getElementById('load-data-btn').addEventListener('click', loadData);
+
+            // Upload data file
+            document.getElementById('upload-file-input').addEventListener('change', function() {
+                if (this.files.length) uploadDataFile(this.files[0]);
+                this.value = '';
+            });
             
             // Prediction button
             document.getElementById('predict-btn').addEventListener('click', startPrediction);

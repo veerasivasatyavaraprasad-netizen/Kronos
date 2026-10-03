@@ -7,3 +7,4 @@ pyyaml>=6.0
 requests>=2.31
 yfinance>=0.2.40
 pytest>=7.0
+gunicorn>=22.0; platform_system != "Windows"

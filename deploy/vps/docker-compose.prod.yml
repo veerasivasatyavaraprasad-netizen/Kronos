@@ -1,0 +1,45 @@
+# Production stack for any Linux VPS: Kronos web UI behind Caddy (automatic HTTPS),
+# plus the hourly forecast/alert/trading scheduler.
+#
+#   cp .env.example .env   # set DOMAIN, KRONOS_USERS, KRONOS_SECRET_KEY, alert/broker keys
+#   docker compose -f deploy/vps/docker-compose.prod.yml up -d --build
+services:
+  web:
+    build: ../..
+    image: kronos-app
+    env_file: ../../.env
+    environment:
+      KRONOS_SECURE_COOKIES: "1"
+    volumes:
+      - ../../data:/app/data
+      - hf-cache:/models
+    restart: unless-stopped
+
+  scheduler:
+    image: kronos-app
+    build: ../..
+    command: ["python", "-m", "automation.kronos_auto", "run", "--every", "60"]
+    env_file: ../../.env
+    volumes:
+      - ../../data:/app/data
+      - ../../outputs:/app/outputs
+      - ../../automation/config.yaml:/app/automation/config.yaml:ro
+      - hf-cache:/models
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env, e.g. kronos.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on: [web]
+    restart: unless-stopped
+
+volumes:
+  hf-cache:
+  caddy-data:

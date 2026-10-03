@@ -1,0 +1,32 @@
+# Render Blueprint: New -> Blueprint -> pick this repo.
+# The web service needs >= 2 GB RAM (Standard plan) to hold PyTorch + Kronos-small.
+services:
+  - type: web
+    name: kronos-web
+    runtime: docker
+    plan: standard
+    healthCheckPath: /healthz
+    envVars:
+      - key: KRONOS_USERS          # user:password pairs, entered in the dashboard
+        sync: false
+      - key: KRONOS_SECRET_KEY
+        generateValue: true
+      - key: KRONOS_SECURE_COOKIES
+        value: "1"
+
+  # Daily forecast run that delivers results via alerts (set alert/broker keys in the dashboard).
+  - type: cron
+    name: kronos-daily-forecast
+    runtime: docker
+    plan: standard
+    schedule: "17 1 * * *"
+    dockerCommand: python -m automation.kronos_auto run
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: SLACK_WEBHOOK_URL
+        sync: false

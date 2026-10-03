@@ -17,6 +17,33 @@ defaults:
   sample_count: 5            # forecast paths; mean is reported, spread gives the band in the chart
   seed: 42
 
+# Alerts after each run. Secrets (bot tokens, SMTP password, webhooks) go in environment
+# variables / .env, never in this file -- see .env.example.
+alerts:
+  enabled: false
+  channels: [telegram, email, discord, slack]   # only those with env vars set are used
+  only_signals: []           # e.g. [UP, DOWN] to skip FLAT forecasts
+  min_abs_change_pct: 0      # only alert when |forecast change| >= this
+  attach_charts: true
+  include_errors: true
+
+# Auto-trading (long-only). Only symbols with a `trade_symbol` are traded.
+# broker: paper  -> simulated account in outputs/paper_account.json (no money involved)
+# broker: alpaca -> Alpaca paper account; real money ONLY if live: true AND env KRONOS_ALLOW_LIVE_TRADING=yes
+trading:
+  enabled: false
+  broker: paper
+  live: false
+  dry_run: false             # true = log decisions without placing orders
+  buy_threshold_pct: 1.0     # buy when forecast change >= +1%
+  sell_threshold_pct: -1.0   # close position when forecast change <= -1%
+  min_paths_agree_pct: 60    # and at least 60% of sampled paths agree
+  order_notional: 1000       # money per buy order
+  max_position_notional: 5000
+  max_orders_per_run: 5
+  max_data_age_hours: 48     # never trade on stale data
+  starting_cash: 100000      # paper broker only
+
 symbols:
   # --- Offline sample data shipped with the repo (always works) ---
   - name: SAMPLE_A_SHARE_5MIN
@@ -29,6 +56,7 @@ symbols:
     symbol: BTCUSDT
     interval: 1h
     limit: 1000
+    trade_symbol: BTC/USD    # Alpaca crypto pair
     enabled: false
 
   - name: AAPL_1D
@@ -36,6 +64,7 @@ symbols:
     symbol: AAPL
     interval: 1d
     period: 3y
+    trade_symbol: AAPL
     enabled: false
 
   - name: SPX_1D

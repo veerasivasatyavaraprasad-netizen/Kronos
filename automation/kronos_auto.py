@@ -7,6 +7,8 @@ Kronos automation CLI.
     python -m automation.kronos_auto run                     # forecast every symbol in config.yaml
     python -m automation.kronos_auto run --every 60          # ...and repeat every 60 minutes
     python -m automation.kronos_auto finetune                # quick CPU fine-tune on bundled CSV
+    python -m automation.kronos_auto alert-test              # check Telegram/email/Discord/Slack setup
+    python -m automation.kronos_auto account                 # auto-trading account + recent trades
     python -m automation.kronos_auto serve                   # start the web UI
 """
 import argparse
@@ -191,6 +193,10 @@ def run_symbols(specs, cfg, evaluate_too=True):
         shutil.rmtree(latest)
     shutil.copytree(run_dir, latest)
     print(f"\nReport: {run_dir / 'summary.md'}  (also copied to {latest})")
+
+    from automation import notify, trading
+    trades = trading.execute(results, specs, cfg, run_dir.parent)
+    notify.send_alerts(results, meta, run_dir, cfg.get("alerts") or {}, trades)
     return results
 
 
@@ -247,6 +253,42 @@ def cmd_finetune(args):
     return rc
 
 
+def cmd_alert_test(args):
+    """Send a sample alert through every configured channel."""
+    from automation import notify
+    cfg = load_config(args.config)
+    alert_cfg = {**(cfg.get("alerts") or {}), "enabled": True, "only_signals": [], "min_abs_change_pct": 0}
+    channels = notify.configured_channels(alert_cfg)
+    if not channels:
+        print("No alert channel configured. Set e.g. TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (see .env.example).")
+        return 1
+    sample = [{"name": "TEST", "last_close": 100.0, "forecast_close": 101.5, "forecast_change_pct": 1.5,
+               "paths_up_pct": 80.0, "signal": "UP", "horizon_end": "test", "last_timestamp": "test"}]
+    status = notify.send_alerts(sample, {"generated": dt.datetime.now().isoformat(timespec="seconds"),
+                                         "model": "test message"}, ROOT, alert_cfg)
+    return 0 if status and all(v == "ok" for v in status.values()) else 1
+
+
+def cmd_account(args):
+    """Show the paper (or Alpaca) account used by auto-trading."""
+    from automation import trading
+    cfg = load_config(args.config)
+    tcfg = trading.trading_config(cfg)
+    broker = trading.make_broker(tcfg, _abs(cfg.get("output_dir", "outputs")))
+    if isinstance(broker, trading.PaperBroker):
+        print(json.dumps(broker.state, indent=2))
+    else:
+        r = broker._req("GET", "/v2/account")
+        r.raise_for_status()
+        acc = r.json()
+        print(f"Alpaca {broker.mode}: equity {acc.get('equity')}, cash {acc.get('cash')}, status {acc.get('status')}")
+    log = _abs(cfg.get("output_dir", "outputs")) / "trades.csv"
+    if log.exists():
+        print(f"\nLast trades ({log}):")
+        print(pd.read_csv(log).tail(10).to_string(index=False))
+    return 0
+
+
 def cmd_serve(args):
     os.environ.setdefault("KRONOS_DATA_DIR", str(DATA_DIR))
     sys.path.insert(0, str(ROOT / "webui"))
@@ -300,11 +342,21 @@ def main(argv=None):
                    help="extra args for train_sequential.py, e.g. --skip-tokenizer")
     s.set_defaults(func=cmd_finetune)
 
+    s = sub.add_parser("alert-test", help="send a test alert to every configured channel")
+    s.add_argument("--config", default=str(DEFAULT_CONFIG))
+    s.set_defaults(func=cmd_alert_test)
+
+    s = sub.add_parser("account", help="show the auto-trading account and recent trades")
+    s.add_argument("--config", default=str(DEFAULT_CONFIG))
+    s.set_defaults(func=cmd_account)
+
     s = sub.add_parser("serve", help="start the web UI")
     s.add_argument("--host", default="0.0.0.0")
     s.add_argument("--port", type=int, default=7070)
     s.set_defaults(func=cmd_serve)
 
+    from automation.env import load_env
+    load_env()
     args = ap.parse_args(argv)
     return args.func(args) or 0
 

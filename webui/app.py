@@ -4,7 +4,7 @@ import numpy as np
 import json
 import plotly.graph_objects as go
 import plotly.utils
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 import sys
 import warnings
@@ -21,8 +21,16 @@ except ImportError:
     MODEL_AVAILABLE = False
     print("Warning: Kronos model cannot be imported, will use simulated data for demonstration")
 
+from automation.env import load_env
+from automation.auth import init_auth
+
+load_env()
 app = Flask(__name__)
-CORS(app)
+app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('KRONOS_MAX_UPLOAD_MB', '50')) * 1024 * 1024
+AUTH_ENABLED = init_auth(app)
+if not AUTH_ENABLED:
+    # Open, local-only mode keeps the original cross-origin API access.
+    CORS(app)
 
 # Global variables to store models
 tokenizer = None
@@ -97,12 +105,12 @@ def load_data_files():
     
     if os.path.exists(data_dir):
         for file in sorted(os.listdir(data_dir)):
-            if file.endswith(('.csv', '.feather')):
+            if file.endswith(('.csv', '.feather')) and not file.startswith('.'):
                 file_path = os.path.join(data_dir, file)
                 file_size = os.path.getsize(file_path)
                 data_files.append({
                     'name': file,
-                    'path': file_path,
+                    'path': file,
                     'size': f"{file_size / 1024:.1f} KB" if file_size < 1024*1024 else f"{file_size / (1024*1024):.1f} MB"
                 })
     
@@ -372,6 +380,27 @@ def get_data_files():
     """Get available data file list"""
     data_files = load_data_files()
     return jsonify(data_files)
+
+@app.route('/api/upload-data', methods=['POST'])
+def upload_data():
+    """Save an uploaded CSV/feather file into DATA_DIR after validating its columns"""
+    from werkzeug.utils import secure_filename
+    upload = request.files.get('file')
+    if upload is None or not upload.filename:
+        return jsonify({'error': 'No file uploaded'}), 400
+    name = secure_filename(upload.filename)
+    if not name.endswith(('.csv', '.feather')):
+        return jsonify({'error': 'Only .csv and .feather files are supported'}), 400
+    target = os.path.join(DATA_DIR, name)
+    tmp = os.path.join(DATA_DIR, '.uploading-' + name)  # keeps the extension for the loader
+    upload.save(tmp)
+    df, error = load_data_file(tmp)
+    if error or df is None or len(df) == 0:
+        os.remove(tmp)
+        return jsonify({'error': error or 'File contains no valid rows'}), 400
+    os.replace(tmp, target)
+    return jsonify({'success': True, 'name': name, 'message': f'Uploaded {name} ({len(df)} rows)'})
+
 
 @app.route('/api/load-data', methods=['POST'])
 def load_data():
@@ -735,6 +764,25 @@ def get_model_status():
             'loaded': False,
             'message': 'Kronos model library not available, please install related dependencies'
         })
+
+def autoload_model():
+    """KRONOS_AUTOLOAD_MODEL=kronos-small preloads a model at startup (handy when hosted)"""
+    global tokenizer, model, predictor
+    key = os.environ.get('KRONOS_AUTOLOAD_MODEL')
+    if not key or not MODEL_AVAILABLE or key not in AVAILABLE_MODELS:
+        return
+    cfg = AVAILABLE_MODELS[key]
+    tokenizer = KronosTokenizer.from_pretrained(cfg['tokenizer_id'])
+    model = Kronos.from_pretrained(cfg['model_id'])
+    predictor = KronosPredictor(model, tokenizer, device=None, max_context=cfg['context_length'])
+    print(f"Preloaded {cfg['name']}")
+
+
+try:
+    autoload_model()
+except Exception as e:  # never block startup on a failed preload
+    print(f"Model preload failed: {e}")
+
 
 if __name__ == '__main__':
     print("Starting Kronos Web UI...")
