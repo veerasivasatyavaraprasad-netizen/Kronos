@@ -9,6 +9,8 @@ Kronos automation CLI.
     python -m automation.kronos_auto finetune                # quick CPU fine-tune on bundled CSV
     python -m automation.kronos_auto alert-test              # check Telegram/email/Discord/Slack setup
     python -m automation.kronos_auto account                 # auto-trading account + recent trades
+    python -m automation.kronos_auto live                    # real-time trading (automation/live.yaml)
+    python -m automation.kronos_auto live-status --stop      # kill switch: block new buys
     python -m automation.kronos_auto serve                   # start the web UI
 """
 import argparse
@@ -289,6 +291,36 @@ def cmd_account(args):
     return 0
 
 
+def cmd_live(args):
+    """Real-time trading loop (Binance / Alpaca) - see automation/live.yaml."""
+    from automation import live
+    live.main(str(_abs(args.config)), once=args.once)
+    return 0
+
+
+def cmd_live_status(args):
+    """Show the live bot's positions, today's PnL and recent trades."""
+    cfg = load_config(args.config)
+    out = _abs(cfg.get("output_dir", "outputs/live"))
+    stop = out / "STOP"
+    if args.stop:
+        out.mkdir(parents=True, exist_ok=True)
+        stop.write_text("Kill switch: remove this file (or run live-status --resume) to allow new buys.\n")
+    if args.resume and stop.exists():
+        stop.unlink()
+    print(f"Kill switch: {'ON - no new buys' if stop.exists() else 'off'}")
+    for f in sorted(out.glob("state_*.json")):
+        st = json.loads(f.read_text())
+        today = st.get("days", {}).get(dt.datetime.utcnow().strftime("%Y-%m-%d"), {})
+        print(f"\n{f.stem.replace('state_', '')}: positions {st.get('positions') or 'none'}")
+        print(f"  today: trades {today.get('trades', 0)}, realised PnL {today.get('realized_pnl', 0):+.4f}")
+    log = out / "live_trades.csv"
+    if log.exists():
+        print("\nRecent trades:")
+        print(pd.read_csv(log).tail(10).to_string(index=False))
+    return 0
+
+
 def cmd_serve(args):
     os.environ.setdefault("KRONOS_DATA_DIR", str(DATA_DIR))
     sys.path.insert(0, str(ROOT / "webui"))
@@ -349,6 +381,17 @@ def main(argv=None):
     s = sub.add_parser("account", help="show the auto-trading account and recent trades")
     s.add_argument("--config", default=str(DEFAULT_CONFIG))
     s.set_defaults(func=cmd_account)
+
+    s = sub.add_parser("live", help="real-time trading loop on Binance / Alpaca")
+    s.add_argument("--config", default="automation/live.yaml")
+    s.add_argument("--once", action="store_true", help="run a single cycle now and exit")
+    s.set_defaults(func=cmd_live)
+
+    s = sub.add_parser("live-status", help="live bot positions, PnL, trades; --stop/--resume kill switch")
+    s.add_argument("--config", default="automation/live.yaml")
+    s.add_argument("--stop", action="store_true", help="turn the kill switch on (no new buys)")
+    s.add_argument("--resume", action="store_true", help="turn the kill switch off")
+    s.set_defaults(func=cmd_live_status)
 
     s = sub.add_parser("serve", help="start the web UI")
     s.add_argument("--host", default="0.0.0.0")

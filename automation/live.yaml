@@ -1,0 +1,58 @@
+# Real-time trading config for:  python -m automation.kronos_auto live
+# API keys are read from .env (see .env.example) -- never put them in this file.
+
+model: kronos-small
+device: auto
+interval: 5m              # candle size; the bot acts right after every candle closes
+lookback: 400             # candles of history fed to Kronos
+pred_len: 12              # forecast horizon in candles (12 x 5m = 1 hour)
+sample_count: 5           # forecast paths; their agreement gates trades
+temperature: 1.0
+top_p: 0.9
+output_dir: outputs/live  # log, trade history, positions, kill switch file (STOP)
+
+accounts:
+  binance:
+    # off | test | testnet | live
+    # test    = real prices, orders validated by Binance but NOT executed (start here)
+    # testnet = orders on testnet.binance.vision with BINANCE_TESTNET_API_KEY/SECRET
+    # live    = REAL MONEY; also requires KRONOS_ALLOW_LIVE_TRADING=yes in .env
+    mode: test
+  alpaca:
+    mode: paper           # off | paper | live (live also requires KRONOS_ALLOW_LIVE_TRADING=yes)
+
+# Risk rules (per symbol values below override these)
+risk:
+  buy_threshold_pct: 0.5      # buy when the 1-hour forecast is >= +0.5% ...
+  sell_threshold_pct: -0.5    # sell the bot's position when it is <= -0.5% ...
+  min_paths_agree_pct: 60     # ... and at least 60% of forecast paths agree
+  stop_loss_pct: 2.0          # always exit if price falls 2% below the bot's entry
+  take_profit_pct: 3.0        # always exit at +3% from entry
+  max_daily_loss: 20          # stop buying for the day after this realised loss (quote currency)
+  max_trades_per_day: 20
+  cooldown_bars: 3            # wait 3 candles between trades on the same symbol
+
+symbols:
+  - name: BTCUSDT
+    broker: binance
+    symbol: BTCUSDT
+    risk:
+      order_notional: 20          # USDT per buy (Binance minimum is about 5 USDT)
+      max_position_notional: 60   # never hold more than this much via the bot
+  - name: ETHUSDT
+    broker: binance
+    symbol: ETHUSDT
+    enabled: false
+    risk: {order_notional: 20, max_position_notional: 60}
+  - name: AAPL
+    broker: alpaca                # trades only while the US market is open
+    symbol: AAPL
+    risk: {order_notional: 1000, max_position_notional: 5000}
+  - name: SPY
+    broker: alpaca
+    symbol: SPY
+    risk: {order_notional: 1000, max_position_notional: 5000}
+
+alerts:
+  enabled: false              # true = message on every fill, failure and start/stop
+  channels: [telegram, email, discord, slack]

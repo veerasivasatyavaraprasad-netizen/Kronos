@@ -148,3 +148,17 @@ def send_alerts(results, meta, run_dir, alert_cfg, trades=None) -> dict:
             status[ch] = f"{type(e).__name__}: {e}"
         print(f"Alert via {ch}: {status[ch]}")
     return status
+
+
+def send_text(text: str, alert_cfg: dict, charts=None) -> dict:
+    """Send a free-form message (live-trading fills, errors) to every configured channel."""
+    if not alert_cfg or not alert_cfg.get("enabled", False):
+        return {}
+    status = {}
+    for ch in configured_channels(alert_cfg):
+        try:
+            SENDERS[ch](text, list(charts or []))
+            status[ch] = "ok"
+        except Exception as e:
+            status[ch] = f"{type(e).__name__}: {e}"
+    return status

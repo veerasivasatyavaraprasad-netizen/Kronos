@@ -90,6 +90,8 @@ docker compose --profile schedule up -d        # re-forecast every hour
 | `python -m automation.kronos_auto serve --port 7070` | Start the web UI |
 | `python -m automation.kronos_auto alert-test` | Send a test alert to every configured channel |
 | `python -m automation.kronos_auto account` | Show the auto-trading account and recent trades |
+| `python -m automation.kronos_auto live` | Real-time trading bot on Binance / Alpaca (`automation/live.yaml`) |
+| `python -m automation.kronos_auto live-status [--stop / --resume]` | Bot positions, PnL, trades; kill switch |
 
 Every run writes to `outputs/<timestamp>/` (copied to `outputs/latest/`):
 
@@ -135,6 +137,52 @@ Use `dry_run: true` to see decisions without placing orders, and
 > ⚠️ Kronos forecasts are noisy. Backtest results (`Backtest MAPE`, `Direction ok` in each report)
 > on a single window say little about future profits. Run on paper for a long time before risking money;
 > you are responsible for any trades.
+
+### Real-time trading bot (Binance + Alpaca, on your Windows PC)
+
+`python -m automation.kronos_auto live` runs continuously: right after every 5-minute candle closes it
+pulls fresh candles from the broker, runs Kronos (about 5 seconds per symbol on a CPU), applies the risk
+rules and places orders. Settings are in `automation/live.yaml`.
+
+**Setup on Windows**
+
+1. Install Python 3.10+ from python.org (tick "Add python.exe to PATH").
+2. Unzip the project, double-click `scripts\setup.bat`.
+3. Copy `.env.example` to `.env` and fill in `BINANCE_API_KEY`, `BINANCE_SECRET_KEY`,
+   `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` (plus Telegram etc. for trade alerts).
+   On Binance, give the key **Spot trading only, withdrawals disabled, restricted to your IP**.
+4. Double-click `scripts\start_live.bat`. The window shows each decision; everything is also logged
+   to `outputs\live\live.log` and `outputs\live\live_trades.csv`.
+5. Optional: right-click `scripts\install_autostart.ps1` → *Run with PowerShell* to start the bot
+   automatically at every Windows log-in (the bot also keeps the PC from sleeping while it runs).
+
+**Going from safe to real money - one step at a time**
+
+| Step | `automation/live.yaml` | `.env` | What happens |
+|---|---|---|---|
+| 1 | `binance: {mode: test}` (default) | - | Real Binance prices; every order is checked by Binance's `/order/test` (proves your key works) but **nothing is bought**. Positions are simulated. |
+| 2 | `binance: {mode: testnet}` | `BINANCE_TESTNET_*` keys | Orders execute on Binance's practice exchange with fake funds. |
+| 3 | `binance: {mode: live}` | `KRONOS_ALLOW_LIVE_TRADING=yes` | **Real orders with real money.** Keep `order_notional` small at first. |
+| - | `alpaca: {mode: paper}` | Alpaca paper keys (`PK...`) | US stocks on Alpaca's paper account, only while the market is open. |
+
+Without `KRONOS_ALLOW_LIVE_TRADING=yes` the bot refuses to start in Binance live mode, and Alpaca
+falls back to paper.
+
+**Risk controls** (in `risk:`, per symbol overrides allowed): buy only when the forecast is above
+`buy_threshold_pct` *and* `min_paths_agree_pct` of the sampled paths agree; per-order and
+per-symbol money caps; `stop_loss_pct` / `take_profit_pct` exits that always apply; `max_daily_loss`
+and `max_trades_per_day` limits; `cooldown_bars` between trades. The bot is long-only and **only
+ever sells what it bought itself** - coins or shares you already held are never touched.
+
+**Control while running**
+
+- `scripts\live_status.bat` - positions held by the bot, today's PnL, recent trades
+- `scripts\stop_buying.bat` - kill switch: no new buys (exits still work); `scripts\resume_buying.bat` undoes it
+- Close the bot window (or Ctrl+C) to stop it completely. Open positions stay open on the exchange.
+
+> ⚠️ Real-money trading can lose money quickly, including through fees (Binance charges ~0.1% per
+> trade) and bugs or outages. Kronos's short-term forecasts are uncertain. Run step 1 for days,
+> then small amounts, and only trade what you can afford to lose.
 
 ### Login and hosting
 
