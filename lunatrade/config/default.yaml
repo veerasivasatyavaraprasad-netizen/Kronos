@@ -1,0 +1,208 @@
+# LunaTrade default configuration.
+# Copy to lunatrade.yaml (repo root) and change what you need; it is deep-merged over this file.
+# SECRETS NEVER GO HERE - they come only from environment variables / .env (see .env.example).
+
+mode: PAPER                 # RESEARCH | PAPER | SHADOW | APPROVAL | LIVE  (LIVE also needs LUNATRADE_ALLOW_LIVE=yes)
+interval: 15m               # decision candle; the engine acts right after each candle closes
+history_bars: 500           # candles kept per symbol
+output_dir: outputs/lunatrade
+
+universe:
+  discover: true            # automatically discover liquid Binance spot pairs
+  quote: USDT
+  always_include: [BTCUSDT, ETHUSDT]
+  static: [BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT]   # used when discovery is off or fails
+  max_symbols: 15
+  min_quote_volume_24h: 50000000    # USDT traded in the last 24h
+  max_spread_bps: 8
+  min_price: 0.0001
+  exclude_bases: [USDC, FDUSD, TUSD, DAI, BUSD, USDP, EUR, AEUR, USDE, PAXG, WBTC, WBETH, BFUSD, XUSD, USD1]
+  exclude_suffixes: [UP, DOWN, BULL, BEAR]
+  refresh_minutes: 360
+
+stocks:
+  enabled: false            # Alpaca equities, traded only while the US market is open
+  symbols: [SPY, QQQ, AAPL, NVDA, MSFT]
+
+brokers:
+  binance:
+    environment: testnet    # paper (simulated fills in every mode) | testnet (https://testnet.binance.vision) | live
+    market: spot            # spot only for now; futures data is read-only for signals
+  alpaca:
+    environment: paper      # paper | live
+
+data:
+  websocket: true           # Binance WebSocket streams; REST polling is the fallback
+  depth_levels: 20
+  derivatives_data: true    # public futures funding / open interest / long-short ratio (read only)
+
+lead_brain:
+  min_conviction: 62        # 0..100 conviction needed to propose opening a position
+  exit_conviction: 58       # opposite conviction that closes an open position
+  min_families_agreeing: 3  # independent families that must agree with the trade
+  dead_zone: 4              # |category score| below this counts as neutral
+  category_weights:
+    technical: 0.20
+    momentum: 0.10
+    volatility: 0.05
+    scanner: 0.07
+    microstructure: 0.08
+    forecast: 0.12
+    news: 0.08
+    social: 0.04
+    onchain: 0.07
+    whale: 0.07
+    macro: 0.07
+    arbitrage: 0.05
+  llm_review: true          # ask the LLM council to review proposals (bounded adjustment only)
+  llm_max_up: 5             # LLM can add at most +5 conviction ...
+  llm_max_down: 15          # ... and remove at most -15
+
+devils_advocate:
+  enabled: true
+  veto_margin: 2.5          # veto when bear_case - bull_case >= this (0..10 scale)
+  max_adjustment: -0.6      # largest size reduction it can impose (-60%)
+  llm: true
+
+risk:
+  risk_per_trade_pct: 0.01          # equity lost if the stop is hit
+  max_position_pct: 0.10            # of equity per position
+  max_symbol_exposure_pct: 0.15
+  max_portfolio_exposure_pct: 0.60
+  max_correlated_exposure_pct: 0.35 # one correlation cluster
+  correlation_threshold: 0.7
+  max_open_positions: 6
+  max_daily_loss_pct: 0.03
+  max_weekly_loss_pct: 0.07
+  max_drawdown_pct: 0.15
+  min_order_notional: 10
+  max_spread_bps: 15
+  max_expected_slippage_bps: 30
+  min_liquidity_quote_volume: 5000000
+  stop_atr_mult: 2.0
+  target_r_multiple: 2.0
+  max_stop_pct: 0.08
+  high_vol_size_mult: 0.6
+  correlation_warning_mult: 0.75
+  time_stop_bars: 96
+  trailing_stop_atr_mult: 2.5
+
+kill_switch:
+  max_data_staleness_seconds: 300
+  max_abnormal_slippage_bps: 150
+  max_consecutive_order_failures: 4
+  max_reconciliation_failures: 2
+
+supervisor:
+  check_interval_seconds: 15
+  healthy_checks_to_resume: 3
+  max_cpu_pct: 95
+  max_memory_pct: 92
+
+approval:
+  timeout_minutes: 15
+  telegram_commands: true   # reply /yes <id> or /no <id> in Telegram (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)
+
+paper:
+  starting_equity: 10000
+  fee_bps: 10
+  slippage_bps: 5
+  partial_fill_probability: 0.0
+
+meta_learning:
+  enabled: true
+  min_samples: 20
+  min_weight: 0.25
+  max_weight: 2.0
+  max_step: 0.10            # weights move at most 10% per update
+  half_life_trades: 50
+  conviction_threshold_bounds: [55, 80]
+
+promotion:                  # gates for moving PAPER -> SHADOW -> APPROVAL -> LIVE (human confirms each)
+  min_trades: 50
+  min_days: 14
+  min_profit_factor: 1.2
+  max_drawdown_pct: 0.10
+  min_expectancy_r: 0.05
+
+feeds:
+  news:
+    enabled: true
+    interval_seconds: 120
+    sources:
+      - {name: coindesk, url: "https://www.coindesk.com/arc/outboundfeeds/rss/", credibility: 0.85}
+      - {name: cointelegraph, url: "https://cointelegraph.com/rss", credibility: 0.75}
+      - {name: decrypt, url: "https://decrypt.co/feed", credibility: 0.75}
+      - {name: theblock, url: "https://www.theblock.co/rss.xml", credibility: 0.85}
+      - {name: bitcoinmagazine, url: "https://bitcoinmagazine.com/.rss/full/", credibility: 0.65}
+      - {name: fed, url: "https://www.federalreserve.gov/feeds/press_all.xml", credibility: 0.98}
+      - {name: sec, url: "https://www.sec.gov/news/pressreleases.rss", credibility: 0.97}
+    binance_announcements: true
+  social:
+    enabled: true
+    interval_seconds: 300
+    subreddits: [CryptoCurrency, Bitcoin, ethereum, CryptoMarkets, SatoshiStreetBets, solana]
+    fear_greed: true
+  onchain:
+    enabled: true
+    interval_seconds: 600
+  whale:
+    enabled: true
+    interval_seconds: 300
+    min_usd: 1000000
+    smart_money_wallets: []   # addresses you want followed
+  macro:
+    enabled: true
+    interval_seconds: 1800
+    tickers: {SPY: SPY, QQQ: QQQ, GOLD: GLD, BONDS: TLT, DOLLAR: UUP, VIX: "^VIX", US10Y: "^TNX", CREDIT: HYG, OIL: USO}
+    # High-impact scheduled events (UTC). Add the official calendar dates you care about.
+    calendar: []
+    #  - {name: FOMC, time: "2026-10-28T18:00:00"}
+    #  - {name: CPI, time: "2026-10-14T12:30:00"}
+  arbitrage:
+    enabled: true
+    interval_seconds: 60
+
+llm:
+  # Several LLMs work together. Every provider whose API key is set joins the council; with none set,
+  # the deterministic rule engine answers so the system still runs.
+  providers:
+    - {name: claude, kind: anthropic, model: claude-opus-5-5, env_key: ANTHROPIC_API_KEY, effort: medium}
+    - {name: claude-fast, kind: anthropic, model: claude-sonnet-5-5, env_key: ANTHROPIC_API_KEY, effort: low}
+    - {name: openai, kind: openai_compatible, model: gpt-4.1, env_key: OPENAI_API_KEY, base_url: "https://api.openai.com/v1"}
+    - {name: gemini, kind: gemini, model: gemini-2.5-pro, env_key: GEMINI_API_KEY}
+    - {name: deepseek, kind: openai_compatible, model: deepseek-chat, env_key: DEEPSEEK_API_KEY, base_url: "https://api.deepseek.com/v1"}
+    - {name: local, kind: ollama, model: llama3.1, env_key: OLLAMA_HOST}
+  roles:                    # which providers serve which agent role (first available wins; council uses all listed)
+    lead_review: [claude, openai, gemini, deepseek, local]
+    devils_advocate: [claude, gemini, openai, deepseek, local]
+    news_analyst: [claude-fast, openai, gemini, local]
+    voice_assistant: [claude-fast, openai, gemini, local]
+    post_trade: [claude-fast, openai, local]
+  council_size: 3           # max providers asked per council decision
+  timeout_seconds: 45
+  max_calls_per_hour: 120   # budget guard
+
+storage:
+  database_url: ""          # empty -> sqlite:///<output_dir>/lunatrade.db ; set LUNATRADE_DATABASE_URL for PostgreSQL
+
+bus:
+  redis_url: ""             # or env LUNATRADE_REDIS_URL
+  kafka_bootstrap: ""       # or env LUNATRADE_KAFKA_BOOTSTRAP
+
+api:
+  host: 0.0.0.0
+  port: 8800
+
+voice:
+  provider: ""              # assemblyai | deepgram | elevenlabs | openai  (key in VOICE_API_KEY)
+  tts_provider: ""          # elevenlabs | openai (optional spoken replies)
+  require_pin_for: [emergency_close, resume, mode_change]
+
+kronos:
+  enabled: true             # uses the repo's Kronos model when torch is installed
+  models: [kronos-small, kronos-mini]
+  lookback: 400
+  pred_len: 8
+  sample_count: 5
+  every_bars: 4             # Kronos is heavier - run it every N bars

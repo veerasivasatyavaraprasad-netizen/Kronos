@@ -1,0 +1,15 @@
+# LunaTrade (multi-agent trading system). Kronos forecasting additionally needs torch (requirements.txt).
+-r requirements-app.txt
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.5
+sqlalchemy>=2.0
+websockets>=12.0
+anthropic>=0.40
+python-multipart>=0.0.9
+httpx>=0.27
+# Optional:
+# psycopg[binary]>=3.1   # PostgreSQL driver (DATABASE_URL=postgresql+psycopg://...)
+# redis>=5.0             # Redis Streams event mirror
+# kafka-python>=2.0      # Kafka event mirror
+# psutil>=5.9            # CPU / memory metrics for the supervisor

@@ -5,6 +5,29 @@ on:
   pull_request:
 
 jobs:
+  lunatrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install LunaTrade dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-lunatrade.txt
+      - name: LunaTrade tests
+        run: python -m pytest tests/lt -q
+      - name: Roster + offline backtest smoke test
+        run: |
+          python -m lunatrade agents
+          python -m lunatrade backtest --synthetic --bars 320 --warmup 200 --name ci > /tmp/bt.json
+          python -c "import json; m=json.load(open('/tmp/bt.json'))['backtest']; print(m); assert m['bars'] > 0"
+      - name: Migration file is up to date
+        run: python -m lunatrade db sql | diff - lunatrade/memory/migrations/0001_initial.sql
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30

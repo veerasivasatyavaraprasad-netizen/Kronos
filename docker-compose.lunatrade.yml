@@ -1,0 +1,53 @@
+# LunaTrade stack:  docker compose -f docker-compose.lunatrade.yml up -d
+# Dashboard: http://localhost:8800  (token: LUNATRADE_API_TOKEN from .env)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: lunatrade
+      POSTGRES_USER: lunatrade
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./lunatrade/memory/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lunatrade"]
+      interval: 10s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+  lunatrade:
+    build:
+      context: .
+      dockerfile: Dockerfile.lunatrade
+    image: lunatrade
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      LUNATRADE_DATABASE_URL: postgresql+psycopg://lunatrade:${POSTGRES_PASSWORD:-change-me}@postgres:5432/lunatrade
+      LUNATRADE_REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8800:8800"
+    volumes:
+      - ./outputs:/app/outputs
+      - ./lunatrade.yaml:/app/lunatrade.yaml:ro
+      - hf-cache:/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  hf-cache:

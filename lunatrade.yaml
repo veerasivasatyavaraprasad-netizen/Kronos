@@ -1,0 +1,26 @@
+# Your LunaTrade settings (deep-merged over lunatrade/config/default.yaml). No secrets in this file.
+# Deployment path: PAPER -> SHADOW -> APPROVAL -> LIVE, promoted one step at a time from the dashboard.
+
+mode: PAPER            # start with paper money on real market data
+interval: 15m
+
+universe:
+  discover: true       # automatically pick liquid Binance spot pairs (strict liquidity/spread filters)
+  max_symbols: 15
+
+brokers:
+  binance:
+    environment: testnet   # APPROVAL/LIVE orders go to the Binance Spot Testnet until you change this to live
+    market: spot
+
+paper:
+  starting_equity: 10000
+
+risk:
+  risk_per_trade_pct: 0.01
+  max_daily_loss_pct: 0.03
+  max_drawdown_pct: 0.15
+
+voice:
+  provider: ""         # assemblyai | deepgram | openai   (key in VOICE_API_KEY)
+  tts_provider: ""     # elevenlabs | openai

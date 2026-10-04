@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 HF_HOME=/models MPLBACKEND=Agg
+
+WORKDIR /app
+
+# CPU PyTorch so the Kronos forecast workers run inside the container (falls back to PyPI if the index is unreachable)
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+ARG WITH_KRONOS=1
+RUN if [ "$WITH_KRONOS" = "1" ]; then pip install torch --index-url ${TORCH_INDEX_URL} || pip install torch; fi
+COPY requirements.txt requirements-app.txt requirements-lunatrade.txt ./
+RUN pip install -r requirements-lunatrade.txt "psycopg[binary]>=3.1" "redis>=5.0" "psutil>=5.9"
+
+COPY model ./model
+COPY automation ./automation
+COPY lunatrade ./lunatrade
+COPY tests ./tests
+COPY conftest.py ./
+
+RUN useradd -m -u 1000 luna && mkdir -p /app/outputs /models && chown -R luna /app /models
+USER luna
+
+ENV LUNATRADE_API_PORT=8800
+EXPOSE 8800
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8800/health')"
+CMD ["python", "-m", "lunatrade", "run"]

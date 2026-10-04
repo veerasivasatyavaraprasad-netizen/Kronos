@@ -49,6 +49,21 @@
 
 </div>
 
+## 🌙 LunaTrade - multi-agent trading system
+
+**LunaTrade** (`lunatrade/`) is a 300-worker multi-agent trading system built on Kronos. It has a lead
+trading brain, a devil's-advocate veto, an independent risk engine, a portfolio brain, a single execution
+gateway for Binance/Alpaca, and a multi-LLM council. Around them sit a kill switch, a 24/7 supervisor,
+human approval, a voice agent, a dashboard, a PostgreSQL journal and a look-ahead-free backtester.
+
+```bash
+pip install -r requirements-lunatrade.txt && cp .env.example .env   # put your keys in .env only
+python -m lunatrade check        # what's configured
+python -m lunatrade run          # PAPER mode + dashboard on http://localhost:8800
+```
+
+Full guide: **[docs/LUNATRADE.md](docs/LUNATRADE.md)**
+
 ## ⚡ Automated App — Quick Start
 
 > **Windows, fastest way:** double-click **`RUN_ME.bat`** in the project folder. On the first run it

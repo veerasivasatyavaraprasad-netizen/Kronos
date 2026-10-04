@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LunaTrade Desk</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #14171f; --muted: #5d6573; --line: #e2e5ea;
+    --pos: #0f8a5f; --neg: #c43d3d; --warn: #b7791f; --accent: #3b5bdb; --chip: #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1016; --panel: #151a23; --ink: #e8ebf0; --muted: #96a0b0; --line: #262d3a;
+      --pos: #3ccf91; --neg: #ff6b6b; --warn: #f0b429; --accent: #7c9cff; --chip: #1e2532;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1016; --panel: #151a23; --ink: #e8ebf0; --muted: #96a0b0; --line: #262d3a;
+    --pos: #3ccf91; --neg: #ff6b6b; --warn: #f0b429; --accent: #7c9cff; --chip: #1e2532;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+           padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 2; }
+  h1 { font-size: 17px; margin: 0; letter-spacing: .02em; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { background: var(--chip); border-radius: 999px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
+  .chip.ok { color: var(--pos); } .chip.bad { color: var(--neg); } .chip.warn { color: var(--warn); }
+  main { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; padding: 12px 16px 40px; max-width: 1500px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+  .s3 { grid-column: span 3; } .s4 { grid-column: span 4; } .s5 { grid-column: span 5; } .s6 { grid-column: span 6; }
+  .s7 { grid-column: span 7; } .s8 { grid-column: span 8; } .s12 { grid-column: span 12; }
+  @media (max-width: 1000px) { .s3, .s4, .s5, .s6, .s7, .s8 { grid-column: span 12; } }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .kpi .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 12px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+  .bar { height: 6px; background: var(--chip); border-radius: 4px; position: relative; min-width: 80px; }
+  .bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .pos { color: var(--pos); } .neg { color: var(--neg); } .muted { color: var(--muted); }
+  button { font: inherit; border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 8px;
+           padding: 7px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.danger { background: var(--neg); color: #fff; border-color: transparent; }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  input[type=text], input[type=password] { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line);
+           background: var(--bg); color: var(--ink); min-width: 0; flex: 1; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .agent { background: var(--chip); border-radius: 8px; padding: 8px 10px; }
+  .agent b { display: block; font-size: 18px; }
+  canvas { width: 100%; height: 120px; display: block; }
+  .log { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 260px; overflow: auto; white-space: pre-wrap; }
+  .approval { border: 1px solid var(--warn); border-radius: 8px; padding: 10px; margin-bottom: 8px; white-space: pre-wrap; }
+  #login { max-width: 420px; margin: 80px auto; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="login" class="card hidden">
+  <h1>LunaTrade</h1>
+  <p class="muted">Enter the API token (LUNATRADE_API_TOKEN or outputs/lunatrade/api_token).</p>
+  <div class="row"><input id="tok" type="password" placeholder="API token" autocomplete="off"><button class="primary" onclick="saveToken()">Open desk</button></div>
+</div>
+
+<div id="app" class="hidden">
+<header>
+  <h1>🌙 LunaTrade · Autonomous Trading Desk</h1>
+  <div class="chips" id="chips"></div>
+</header>
+<main>
+  <section class="card s12">
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <section class="card s8">
+    <h2>Active signals (Lead Brain conviction)</h2>
+    <div class="scroll"><table><thead><tr><th>Symbol</th><th>Price</th><th>View</th><th>Conviction</th><th>Families</th><th>Regime</th><th>Top drivers</th></tr></thead><tbody id="signals"></tbody></table></div>
+  </section>
+
+  <section class="card s4">
+    <h2>Controls</h2>
+    <div class="controls">
+      <button onclick="act('pause')">⏸ Pause trading</button>
+      <button onclick="act('resume', true)">▶ Resume</button>
+      <button class="danger" onclick="emergency()">⛔ Emergency close</button>
+    </div>
+    <p class="muted" style="margin:10px 0 6px">Kill switch</p>
+    <div id="ks" class="log"></div>
+    <div class="row" style="margin-top:8px"><button onclick="resetKS()">Reset kill switch</button></div>
+    <p class="muted" style="margin:14px 0 6px">Voice / text command</p>
+    <div class="row"><input id="cmd" type="text" placeholder="What's happening with BTC?"><button onclick="sendCmd()">Ask</button><button id="mic" onclick="toggleMic()">🎙</button></div>
+    <div id="answer" class="log" style="margin-top:8px"></div>
+  </section>
+
+  <section class="card s5">
+    <h2>Portfolio</h2>
+    <canvas id="eq"></canvas>
+    <div class="scroll"><table><thead><tr><th>Position</th><th>Qty</th><th>Entry</th><th>Price</th><th>PnL</th><th>Stop</th><th></th></tr></thead><tbody id="positions"></tbody></table></div>
+  </section>
+
+  <section class="card s7">
+    <h2>Pending approvals</h2>
+    <div id="approvals" class="muted">No trade is waiting for you.</div>
+    <h2 style="margin-top:14px">Recent proposals</h2>
+    <div class="scroll"><table><thead><tr><th>Time</th><th>Symbol</th><th>Action</th><th>Conviction</th><th>Status</th><th>Devil's advocate</th></tr></thead><tbody id="proposals"></tbody></table></div>
+  </section>
+
+  <section class="card s6">
+    <h2>Agent network</h2>
+    <div id="agentsum" class="chips" style="margin-bottom:10px"></div>
+    <div class="agents" id="agents"></div>
+    <h2 style="margin-top:14px">LLM council</h2>
+    <div id="llm" class="chips"></div>
+  </section>
+
+  <section class="card s6">
+    <h2>Strategy weights (meta-learning)</h2>
+    <div class="scroll"><table><thead><tr><th>Strategy</th><th>Weight</th><th>Signals scored</th><th>Hit rate</th><th>Recent</th></tr></thead><tbody id="strategies"></tbody></table></div>
+  </section>
+
+  <section class="card s6">
+    <h2>News intelligence</h2>
+    <div class="scroll"><table><thead><tr><th>Time</th><th>Event</th><th>Sent.</th><th>Headline</th></tr></thead><tbody id="news"></tbody></table></div>
+  </section>
+
+  <section class="card s6">
+    <h2>Event bus</h2>
+    <div id="events" class="log"></div>
+  </section>
+</main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let TOKEN = null;
+try { TOKEN = localStorage.getItem("lt_token"); } catch (e) {}
+const fmt = (x, d = 2) => (x === null || x === undefined || Number.isNaN(x)) ? "–" : Number(x).toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: d});
+const pct = (x, d = 1) => (x === null || x === undefined) ? "–" : (x * 100).toFixed(d) + "%";
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+function saveToken() { TOKEN = $("tok").value.trim(); try { localStorage.setItem("lt_token", TOKEN); } catch (e) {} boot(); }
+
+async function api(path, opts = {}) {
+  const headers = Object.assign({"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"}, opts.headers || {});
+  const r = await fetch(path, Object.assign({}, opts, {headers}));
+  if (r.status === 401) { $("app").classList.add("hidden"); $("login").classList.remove("hidden"); throw new Error("unauthorized"); }
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || body.error || r.statusText);
+  return body;
+}
+
+function chip(text, cls = "") { return `<span class="chip ${cls}">${esc(text)}</span>`; }
+
+function render(st) {
+  const pf = st.portfolio, ks = st.kill_switch, h = st.health || {};
+  const reg = st.market_regime ? st.market_regime.label : "UNKNOWN";
+  $("chips").innerHTML = chip("MODE " + st.mode, st.mode === "LIVE" ? "bad" : "ok") + chip("REGIME " + reg) +
+    chip(h.healthy === false ? "SYSTEM DEGRADED" : "SYSTEM HEALTHY", h.healthy === false ? "bad" : "ok") +
+    chip(ks.active ? "NEW TRADES BLOCKED" : "TRADING ENABLED", ks.active ? "bad" : "ok") +
+    chip("cycle " + st.cycle + " · " + fmt(st.last_cycle_ms, 0) + " ms");
+  const unreal = Object.values(pf.positions).reduce((a, p) => a + p.unrealized, 0);
+  const k = [["Equity", fmt(pf.equity)], ["Cash", fmt(pf.cash)], ["Realised PnL", fmt(pf.realized)], ["Unrealised", fmt(unreal)],
+             ["Drawdown", pct(pf.drawdown)], ["Exposure", pct(pf.exposure_pct)], ["Open positions", Object.keys(pf.positions).length],
+             ["Min conviction", fmt(st.min_conviction, 0)]];
+  $("kpis").innerHTML = k.map(([l, v]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  $("signals").innerHTML = st.signals.map((a) => {
+    const col = a.direction === "LONG" ? "var(--pos)" : a.direction === "SHORT" ? "var(--neg)" : "var(--muted)";
+    const drivers = a.categories.sort((x, y) => Math.abs(y.score) - Math.abs(x.score)).slice(0, 3)
+      .map((c) => `${c.family} <span class="${c.score >= 0 ? "pos" : "neg"}">${c.score > 0 ? "+" : ""}${c.score.toFixed(0)}</span>`).join(" · ");
+    return `<tr><td><b>${esc(a.symbol)}</b></td><td>${fmt(st.prices[a.symbol], 4)}</td><td style="color:${col}">${a.direction}</td>
+      <td><div class="row"><div class="bar"><i style="width:${a.conviction}%;background:${col}"></i></div><span>${a.conviction.toFixed(0)}</span></div></td>
+      <td>${a.families_agreeing}<span class="muted">/${a.families_opposing}</span></td><td class="muted">${esc(a.regime)}</td><td>${drivers}</td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="muted">Waiting for the first cycle…</td></tr>`;
+
+  $("positions").innerHTML = Object.entries(pf.positions).map(([s, p]) =>
+    `<tr><td><b>${esc(s)}</b></td><td>${fmt(p.qty, 6)}</td><td>${fmt(p.entry, 4)}</td><td>${fmt(p.price, 4)}</td>
+     <td class="${p.unrealized >= 0 ? "pos" : "neg"}">${fmt(p.unrealized)}</td><td>${fmt(p.stop, 4)}</td>
+     <td><button onclick="closeSym('${esc(s)}')">Close</button></td></tr>`).join("") || `<tr><td colspan="7" class="muted">No open positions</td></tr>`;
+
+  $("ks").textContent = ks.reasons.length ? ks.reasons.join("\n") : "clear";
+  $("approvals").innerHTML = st.pending_approvals.length ? st.pending_approvals.map((r) =>
+    `<div class="approval">${esc(r.summary)}<div class="row" style="margin-top:8px"><button class="primary" onclick="decide('${r.short_id}', true)">YES</button><button onclick="decide('${r.short_id}', false)">NO</button></div></div>`).join("")
+    : `<span class="muted">No trade is waiting for you.</span>`;
+  $("proposals").innerHTML = st.recent_proposals.slice().reverse().map((p) => {
+    const da = p.devils_advocate || {};
+    const dtxt = da.bear_case !== undefined ? `bull ${da.bull_case} / bear ${da.bear_case}${da.veto ? " · VETO" : ""}` : "";
+    return `<tr><td class="muted">${esc((p.ts || "").slice(11, 16))}</td><td>${esc(p.symbol)}</td><td>${esc(p.action)}</td>
+      <td>${fmt(p.conviction, 0)}</td><td>${esc(p.status)}</td><td class="muted">${esc(dtxt)}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="muted">No proposals yet</td></tr>`;
+
+  const w = st.workers;
+  $("agentsum").innerHTML = chip(w.total + " WORKERS") + chip(w.online + " ONLINE", "ok") + chip(w.degraded + " DEGRADED", "warn") + chip(w.offline + " OFFLINE", "bad");
+}
+
+async function renderAgents() {
+  const a = await api("/api/agents");
+  const fam = {};
+  a.workers.forEach((w) => { fam[w.family] = fam[w.family] || {n: 0, on: 0}; fam[w.family].n++; if (w.status === "ONLINE") fam[w.family].on++; });
+  $("agents").innerHTML = Object.entries(fam).map(([f, v]) => `<div class="agent"><b>${v.on}/${v.n}</b><span class="muted">${esc(f)}</span></div>`).join("");
+  $("llm").innerHTML = a.llm.providers.map((p) => chip(`${p.name} · ${p.model}`, p.available ? "ok" : "")).join("");
+  const s = await api("/api/strategies");
+  $("strategies").innerHTML = Object.entries(s.memory).sort((x, y) => y[1].weight - x[1].weight).map(([k, v]) =>
+    `<tr><td>${esc(k)}</td><td>${fmt(v.weight, 2)}</td><td>${v.samples}</td><td>${pct(v.hit_rate)}</td><td>${pct(v.recent_hit_rate)}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="muted">Scoring starts after the first signal horizons pass</td></tr>`;
+  const n = await api("/api/news?limit=30");
+  $("news").innerHTML = n.map((x) => `<tr><td class="muted">${esc(x.ts.slice(5, 16))}</td><td>${esc(x.event_type)}</td>
+    <td class="${x.sentiment >= 0 ? "pos" : "neg"}">${x.sentiment.toFixed(2)}</td><td>${esc(x.title)}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">No news ingested yet</td></tr>`;
+  const ev = await api("/api/events?limit=40");
+  $("events").textContent = ev.slice().reverse().map((e) => `${e.ts.slice(11, 19)} ${e.topic} ${e.source}`).join("\n");
+  drawEquity(await api("/api/equity?limit=400"));
+}
+
+function drawEquity(rows) {
+  const c = $("eq"), ctx = c.getContext("2d"), dpr = window.devicePixelRatio || 1;
+  c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr; ctx.scale(dpr, dpr);
+  const W = c.clientWidth, H = c.clientHeight; ctx.clearRect(0, 0, W, H);
+  if (rows.length < 2) { ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--muted"); ctx.fillText("equity curve appears after a few cycles", 8, 20); return; }
+  const ys = rows.map((r) => r.equity), lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--accent"); ctx.lineWidth = 2; ctx.beginPath();
+  ys.forEach((y, i) => { const x = i / (ys.length - 1) * (W - 4) + 2, yy = H - 6 - (y - lo) / span * (H - 12); i ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); });
+  ctx.stroke();
+}
+
+async function refresh() {
+  try { render(await api("/api/status")); } catch (e) { console.warn(e); }
+}
+
+function askPin() { return prompt("Control PIN") || ""; }
+async function act(name, pin = false) {
+  try { await api("/api/control/" + name, {method: "POST", headers: pin ? {"X-Control-Pin": askPin()} : {}}); refresh(); }
+  catch (e) { alert(e.message); }
+}
+async function emergency() {
+  if (!confirm("Close ALL positions at market and block new trades?")) return;
+  try { const r = await api("/api/control/emergency-close", {method: "POST", headers: {"X-Control-Pin": askPin()}}); alert(r.orders.length + " close orders sent"); refresh(); }
+  catch (e) { alert(e.message); }
+}
+async function resetKS() {
+  try { const r = await api("/api/control/kill-switch/reset", {method: "POST", body: JSON.stringify({}), headers: {"X-Control-Pin": askPin()}}); alert(r.result); refresh(); }
+  catch (e) { alert(e.message); }
+}
+async function closeSym(s) {
+  if (!confirm("Close " + s + "?")) return;
+  try { const r = await api("/api/control/close/" + s, {method: "POST", headers: {"X-Control-Pin": askPin()}}); alert(r.result); refresh(); }
+  catch (e) { alert(e.message); }
+}
+async function decide(id, yes) {
+  try { const r = await api(`/api/approvals/${id}/${yes ? "approve" : "reject"}`, {method: "POST"}); alert(r.result); refresh(); }
+  catch (e) { alert(e.message); }
+}
+async function sendCmd() {
+  const text = $("cmd").value.trim(); if (!text) return;
+  try { const r = await api("/api/voice/command", {method: "POST", body: JSON.stringify({text})}); $("answer").textContent = r.answer; speak(r.answer); }
+  catch (e) { $("answer").textContent = e.message; }
+}
+function speak(t) { try { if (window.speechSynthesis) speechSynthesis.speak(new SpeechSynthesisUtterance(t)); } catch (e) {} }
+
+let rec = null;
+async function toggleMic() {
+  if (rec) { rec.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const chunks = []; rec = new MediaRecorder(stream);
+    rec.ondataavailable = (e) => chunks.push(e.data);
+    rec.onstop = async () => {
+      $("mic").textContent = "🎙"; stream.getTracks().forEach((t) => t.stop()); rec = null;
+      const fd = new FormData(); fd.append("file", new Blob(chunks, {type: "audio/webm"}), "speech.webm");
+      const r = await fetch("/api/voice/audio", {method: "POST", headers: {"Authorization": "Bearer " + TOKEN}, body: fd});
+      const body = await r.json(); $("answer").textContent = (body.transcript ? "“" + body.transcript + "”\n" : "") + (body.answer || body.detail || body.error);
+      if (body.answer) speak(body.answer);
+    };
+    rec.start(); $("mic").textContent = "⏹";
+  } catch (e) { $("answer").textContent = "Microphone unavailable: " + e.message; }
+}
+$("cmd") && $("cmd").addEventListener("keydown", (e) => { if (e.key === "Enter") sendCmd(); });
+
+async function boot() {
+  if (!TOKEN) { $("login").classList.remove("hidden"); return; }
+  $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+  await refresh(); renderAgents().catch(console.warn);
+  setInterval(refresh, 5000); setInterval(() => renderAgents().catch(console.warn), 30000);
+}
+boot();
+</script>
+</body>
+</html>

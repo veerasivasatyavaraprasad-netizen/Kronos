@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 CONFIG ?= automation/config.yaml
 
-.PHONY: setup models run forecast fetch serve test examples finetune finetune-full qlib-pipeline docker-build docker-up docker-run clean
+.PHONY: luna luna-cycle luna-backtest luna-test luna-check luna-docker setup models run forecast fetch serve test examples finetune finetune-full qlib-pipeline docker-build docker-up docker-run clean
 
 setup:            ## create venv, install deps, download models, smoke test
 	./scripts/setup.sh
@@ -49,3 +49,22 @@ docker-run:       ## one forecast run in docker
 
 clean:
 	rm -rf outputs __pycache__ */__pycache__
+
+# ---------------------------------------------------------------- LunaTrade
+luna:             ## LunaTrade engine + dashboard on :8800 (mode from lunatrade.yaml)
+	$(PY) -m lunatrade run
+
+luna-cycle:       ## one decision cycle on live market data
+	$(PY) -m lunatrade cycle
+
+luna-backtest:    ## backtest + walk-forward + Monte Carlo + stress on Binance data
+	$(PY) -m lunatrade backtest --symbols BTCUSDT,ETHUSDT,SOLUSDT --bars 2000 --walk-forward --monte-carlo --stress
+
+luna-test:        ## LunaTrade test suite
+	$(PY) -m pytest tests/lt -q
+
+luna-check:       ## which keys/services are configured (never prints secrets)
+	$(PY) -m lunatrade check
+
+luna-docker:      ## postgres + redis + lunatrade in docker
+	docker compose -f docker-compose.lunatrade.yml up -d --build
