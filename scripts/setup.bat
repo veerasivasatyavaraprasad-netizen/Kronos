@@ -3,9 +3,15 @@ set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 REM One-shot Windows setup: venv + dependencies + model download + smoke test.
 cd /d "%~dp0\.."
-if not exist .venv (
-  echo ^>^> Creating virtualenv .venv
-  python -m venv .venv || goto :error
+if not defined PY call "%~dp0find_python.bat"
+if not defined PY (
+  echo Python 3.10+ not found. Run RUN_ME.bat, or install Python 3.11 from python.org.
+  goto :error
+)
+if not exist .venv\Scripts\python.exe (
+  echo ^>^> Creating virtualenv .venv with %PY%
+  if exist .venv rmdir /s /q .venv
+  "%PY%" -m venv .venv || goto :error
 )
 call .venv\Scripts\activate.bat
 python -m pip install -q --upgrade pip
