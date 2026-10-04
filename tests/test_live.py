@@ -74,11 +74,13 @@ def make_handler(ex: FakeExchange):
                                                     {"filterType": "NOTIONAL", "minNotional": "5.00000000"}]}]})
             if u.path == "/api/v3/klines":
                 return self._send(ex.klines(int(p.get("limit", 500))))
-            if u.path.startswith("/api/v3/"):
+            if u.path.startswith(("/api/v3/", "/sapi/")):
                 if not self._signed_ok(u.query):
                     return self._send({"code": -1022, "msg": "bad signature"}, 401)
+                if u.path == "/sapi/v1/account/apiRestrictions":
+                    return self._send({"enableWithdrawals": False, "ipRestrict": True})
                 if u.path == "/api/v3/account":
-                    return self._send({"balances": [{"asset": a, "free": str(v), "locked": "0"} for a, v in ex.balances.items()]})
+                    return self._send({"canTrade": True, "balances": [{"asset": a, "free": str(v), "locked": "0"} for a, v in ex.balances.items()]})
                 if u.path == "/api/v3/order/test":
                     ex.test_orders.append(p)
                     return self._send({})
@@ -257,3 +259,23 @@ def test_alpaca_paper_respects_market_clock(exchange, monkeypatch):
 def test_alpaca_live_without_switch_falls_back_to_paper(exchange):
     t = live.LiveTrader(config("off", "live"), predictor=FakePredictor(0))
     assert t.brokers["alpaca"].mode == "paper"
+
+
+def test_setup_wizard_writes_env_and_checks(exchange, tmp_path, monkeypatch):
+    from automation import setup_wizard as w
+    env = tmp_path / ".env"
+    monkeypatch.setattr(w, "ENV_PATH", env)
+    monkeypatch.setattr(w, "ROOT", tmp_path)
+    (tmp_path / ".env.example").write_text("# comment\nBINANCE_API_KEY=\nBINANCE_SECRET_KEY=\nKRONOS_SECRET_KEY=\n")
+    answers = iter(["new-key", SECRET] + [""] * 20)
+    monkeypatch.setattr(w.getpass, "getpass", lambda prompt="": next(answers))
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    monkeypatch.setattr(w, "CHECKS", [])
+    assert w.configure() == 0
+    text = env.read_text()
+    assert "# comment" in text and "BINANCE_API_KEY=new-key" in text and f"BINANCE_SECRET_KEY={SECRET}" in text
+    assert len(w.read_env_file(env)["KRONOS_SECRET_KEY"]) == 64
+
+    monkeypatch.setenv("BINANCE_API_KEY", "test-key")
+    status, msg = w.check_binance()
+    assert status in ("ok", "warn") and "canTrade" in msg

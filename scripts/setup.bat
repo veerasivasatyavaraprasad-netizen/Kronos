@@ -1,4 +1,6 @@
 @echo off
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
 REM One-shot Windows setup: venv + dependencies + model download + smoke test.
 cd /d "%~dp0\.."
 if not exist .venv (
@@ -13,8 +15,10 @@ python -m automation.kronos_auto setup-models --model kronos-small || goto :erro
 python -m automation.kronos_auto setup-models --model kronos-mini || goto :error
 python -m automation.kronos_auto run --no-backtest || goto :error
 echo.
-echo Setup complete. Start the web UI with:  scripts\start.bat
-echo Forecast all configured symbols with:  .venv\Scripts\python -m automation.kronos_auto run
+echo Setup complete. Next steps:
+echo   1. scripts\configure.bat   - enter your API keys and test them
+echo   2. scripts\start_live.bat  - start the real-time trading bot (Binance starts in TEST mode)
+echo   3. scripts\start.bat       - web UI at http://localhost:7070 (live bot dashboard: /live)
 exit /b 0
 :error
 echo Setup failed.

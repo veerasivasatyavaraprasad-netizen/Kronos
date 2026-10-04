@@ -765,6 +765,62 @@ def get_model_status():
             'message': 'Kronos model library not available, please install related dependencies'
         })
 
+def _live_dir():
+    import yaml
+    cfg_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'automation', 'live.yaml')
+    out = 'outputs/live'
+    if os.path.exists(cfg_path):
+        with open(cfg_path, encoding='utf-8') as f:
+            out = (yaml.safe_load(f) or {}).get('output_dir', out)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return out if os.path.isabs(out) else os.path.join(root, out)
+
+
+@app.route('/live')
+def live_page():
+    return render_template('live.html')
+
+
+@app.route('/api/live-status')
+def live_status():
+    """Positions, PnL, trades and log tail of the real-time trading bot"""
+    out = _live_dir()
+    today = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+    accounts = []
+    if os.path.isdir(out):
+        for name in sorted(os.listdir(out)):
+            if name.startswith('state_') and name.endswith('.json'):
+                with open(os.path.join(out, name), encoding='utf-8') as f:
+                    st = json.load(f)
+                accounts.append({'account': name[6:-5], 'positions': st.get('positions', {}),
+                                 'today': st.get('days', {}).get(today, {'trades': 0, 'realized_pnl': 0})})
+    trades = []
+    trades_path = os.path.join(out, 'live_trades.csv')
+    if os.path.exists(trades_path):
+        trades = pd.read_csv(trades_path, on_bad_lines='skip').tail(50).iloc[::-1].fillna('').to_dict('records')
+    log_tail = []
+    log_path = os.path.join(out, 'live.log')
+    if os.path.exists(log_path):
+        with open(log_path, encoding='utf-8', errors='replace') as f:
+            log_tail = f.readlines()[-40:]
+    running = os.path.exists(log_path) and (datetime.datetime.now().timestamp() - os.path.getmtime(log_path)) < 900
+    return jsonify({'kill_switch': os.path.exists(os.path.join(out, 'STOP')), 'running': running,
+                    'accounts': accounts, 'trades': trades, 'log': log_tail})
+
+
+@app.route('/api/live-killswitch', methods=['POST'])
+def live_killswitch():
+    out = _live_dir()
+    os.makedirs(out, exist_ok=True)
+    stop = os.path.join(out, 'STOP')
+    if (request.get_json(silent=True) or {}).get('on'):
+        with open(stop, 'w') as f:
+            f.write('Kill switch set from the web UI\n')
+    elif os.path.exists(stop):
+        os.remove(stop)
+    return jsonify({'kill_switch': os.path.exists(stop)})
+
+
 def autoload_model():
     """KRONOS_AUTOLOAD_MODEL=kronos-small preloads a model at startup (handy when hosted)"""
     global tokenizer, model, predictor

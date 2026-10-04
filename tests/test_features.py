@@ -171,3 +171,26 @@ def test_login_required_and_upload(webapp):
     bad = webapp.post("/api/upload-data", data={"file": (io.BytesIO(b"a,b\n1,2\n"), "bad.csv")},
                       content_type="multipart/form-data")
     assert bad.status_code == 400
+
+
+def test_live_dashboard(webapp, tmp_path, monkeypatch):
+    import json as _json
+    import webui.app as appmod
+    monkeypatch.setattr(appmod, "_live_dir", lambda: str(tmp_path / "live"))
+    assert webapp.get("/api/live-status").status_code == 401
+    webapp.post("/login", data={"username": "alice", "password": "pw1"})
+    d = webapp.get("/api/live-status").get_json()
+    assert d["accounts"] == [] and d["kill_switch"] is False and d["running"] is False
+    (tmp_path / "live").mkdir(exist_ok=True)
+    (tmp_path / "live" / "state_binance_test.json").write_text(_json.dumps(
+        {"positions": {"BTCUSDT": {"qty": 0.001, "entry": 60000}}, "days": {}}))
+    (tmp_path / "live" / "live_trades.csv").write_text(
+        "time,broker,mode,symbol,side,qty,price,status,pnl,reason\n2026-01-01,binance,test,BTCUSDT,buy,0.001,60000,ok,,x\n")
+    (tmp_path / "live" / "live.log").write_text("line1\n")
+    d = webapp.get("/api/live-status").get_json()
+    assert d["accounts"][0]["positions"]["BTCUSDT"]["qty"] == 0.001 and d["trades"][0]["side"] == "buy"
+    assert d["running"] is True and d["log"] == ["line1\n"]
+    assert webapp.post("/api/live-killswitch", json={"on": True}).get_json()["kill_switch"] is True
+    assert (tmp_path / "live" / "STOP").exists()
+    assert webapp.post("/api/live-killswitch", json={"on": False}).get_json()["kill_switch"] is False
+    assert webapp.get("/live").status_code == 200

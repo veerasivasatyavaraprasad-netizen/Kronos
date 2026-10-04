@@ -90,6 +90,7 @@ docker compose --profile schedule up -d        # re-forecast every hour
 | `python -m automation.kronos_auto serve --port 7070` | Start the web UI |
 | `python -m automation.kronos_auto alert-test` | Send a test alert to every configured channel |
 | `python -m automation.kronos_auto account` | Show the auto-trading account and recent trades |
+| `python -m automation.kronos_auto configure` / `check` | Enter API keys (hidden) / test all connections and key safety |
 | `python -m automation.kronos_auto live` | Real-time trading bot on Binance / Alpaca (`automation/live.yaml`) |
 | `python -m automation.kronos_auto live-status [--stop / --resume]` | Bot positions, PnL, trades; kill switch |
 
@@ -148,9 +149,11 @@ rules and places orders. Settings are in `automation/live.yaml`.
 
 1. Install Python 3.10+ from python.org (tick "Add python.exe to PATH").
 2. Unzip the project, double-click `scripts\setup.bat`.
-3. Copy `.env.example` to `.env` and fill in `BINANCE_API_KEY`, `BINANCE_SECRET_KEY`,
-   `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` (plus Telegram etc. for trade alerts).
-   On Binance, give the key **Spot trading only, withdrawals disabled, restricted to your IP**.
+3. Double-click `scripts\configure.bat` and paste your keys when asked (input is hidden; they are
+   saved only in `.env` on your PC). It then tests every connection and warns if your Binance key
+   has withdrawals enabled, isn't IP-restricted, or your PC clock is off. Re-test any time with
+   `scripts\check.bat`. On Binance, give the key **Spot trading only, withdrawals disabled,
+   restricted to your IP**.
 4. Double-click `scripts\start_live.bat`. The window shows each decision; everything is also logged
    to `outputs\live\live.log` and `outputs\live\live_trades.csv`.
 5. Optional: right-click `scripts\install_autostart.ps1` → *Run with PowerShell* to start the bot
@@ -175,6 +178,9 @@ and `max_trades_per_day` limits; `cooldown_bars` between trades. The bot is long
 ever sells what it bought itself** - coins or shares you already held are never touched.
 
 **Control while running**
+
+- Live dashboard: start the web UI (`scripts\start.bat`) and open http://localhost:7070/live -
+  positions, today's PnL, trades, the log, and a *Stop new buys* button.
 
 - `scripts\live_status.bat` - positions held by the bot, today's PnL, recent trades
 - `scripts\stop_buying.bat` - kill switch: no new buys (exits still work); `scripts\resume_buying.bat` undoes it

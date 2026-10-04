@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kronos Live Bot</title>
+<style>
+  :root { --bg:#f4f6fb; --card:#fff; --text:#1f2937; --muted:#6b7280; --line:#e5e7eb; --up:#15803d; --down:#b91c1c; --accent:#667eea; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f172a; --card:#1e293b; --text:#e5e7eb; --muted:#94a3b8; --line:#334155; --up:#4ade80; --down:#f87171; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; padding:16px; }
+  h1 { font-size:20px; margin:0; }
+  main { padding:0 16px 24px; display:grid; gap:16px; max-width:1200px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; overflow-x:auto; }
+  .row { display:flex; flex-wrap:wrap; gap:12px; }
+  .tile { flex:1 1 180px; }
+  .label { color:var(--muted); font-size:13px; }
+  .value { font-size:22px; font-weight:600; margin-top:4px; }
+  .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-size:13px; font-weight:600; }
+  .on { background:#fee2e2; color:#991b1b; } .off { background:#dcfce7; color:#166534; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .buy { color:var(--up); font-weight:600; } .sell { color:var(--down); font-weight:600; }
+  pre { margin:0; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:360px; overflow:auto; }
+  button { border:0; border-radius:6px; padding:9px 14px; font-size:14px; cursor:pointer; color:#fff; background:var(--accent); }
+  button.danger { background:#dc2626; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 Kronos live trading bot</h1>
+  <div class="row" style="align-items:center">
+    <span id="running" class="pill off">…</span>
+    <span id="kill" class="pill off">…</span>
+    <button id="kill-btn" class="danger">Stop new buys</button>
+    <a href="/">Forecast UI</a>
+    {% if current_user %}<a href="/logout">Log out</a>{% endif %}
+  </div>
+</header>
+<main>
+  <section class="card"><div class="row" id="accounts"></div></section>
+  <section class="card">
+    <h3 style="margin-top:0">Recent trades</h3>
+    <table><thead><tr><th>Time (UTC)</th><th>Account</th><th>Side</th><th>Symbol</th><th>Qty</th><th>Price</th><th>PnL</th><th>Status</th><th>Reason</th></tr></thead>
+      <tbody id="trades"><tr><td colspan="9">No trades yet</td></tr></tbody></table>
+  </section>
+  <section class="card"><h3 style="margin-top:0">Log</h3><pre id="log">Loading…</pre></section>
+</main>
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let killOn = false;
+
+async function refresh() {
+  const r = await fetch('/api/live-status');
+  if (r.status === 401) { location.href = '/login?next=/live'; return; }
+  const d = await r.json();
+  killOn = d.kill_switch;
+  document.getElementById('running').textContent = d.running ? '● Bot running' : '○ Bot not running';
+  document.getElementById('running').className = 'pill ' + (d.running ? 'off' : 'on');
+  document.getElementById('kill').textContent = killOn ? 'Kill switch ON - no new buys' : 'Buying allowed';
+  document.getElementById('kill').className = 'pill ' + (killOn ? 'on' : 'off');
+  document.getElementById('kill-btn').textContent = killOn ? 'Resume buying' : 'Stop new buys';
+
+  const acc = d.accounts.map(a => {
+    const pos = Object.entries(a.positions);
+    const pnl = Number(a.today.realized_pnl || 0);
+    return `<div class="tile"><div class="label">${esc(a.account)}</div>
+      <div class="value" style="color:${pnl >= 0 ? 'var(--up)' : 'var(--down)'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)}</div>
+      <div class="label">today's realised PnL · ${a.today.trades || 0} trades</div>
+      <div style="margin-top:8px;font-size:14px">${pos.length ? pos.map(([s, p]) =>
+        `${esc(s)}: ${Number(p.qty).toPrecision(6)} @ ${Number(p.entry).toPrecision(6)}`).join('<br>') : 'No open positions'}</div></div>`;
+  }).join('');
+  document.getElementById('accounts').innerHTML = acc || '<div class="label">The bot has not run yet. Start scripts\\start_live.bat on your PC.</div>';
+
+  document.getElementById('trades').innerHTML = d.trades.length ? d.trades.map(t =>
+    `<tr><td>${esc(t.time)}</td><td>${esc(t.broker)} (${esc(t.mode)})</td><td class="${esc(t.side)}">${esc(String(t.side).toUpperCase())}</td>
+     <td>${esc(t.symbol)}</td><td>${esc(t.qty)}</td><td>${esc(t.price)}</td><td>${t.pnl === '' ? '' : Number(t.pnl).toFixed(4)}</td>
+     <td>${esc(t.status)}</td><td>${esc(t.reason)}</td></tr>`).join('') : '<tr><td colspan="9">No trades yet</td></tr>';
+  const log = document.getElementById('log');
+  log.textContent = d.log.join('') || 'No log yet.';
+  log.scrollTop = log.scrollHeight;
+}
+
+document.getElementById('kill-btn').onclick = async () => {
+  if (!killOn && !confirm('Stop the bot from opening new positions? (Stop-loss/take-profit exits keep working.)')) return;
+  await fetch('/api/live-killswitch', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({on: !killOn})});
+  refresh();
+};
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

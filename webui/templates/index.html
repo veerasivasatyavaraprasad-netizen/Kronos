@@ -439,11 +439,9 @@
     </style>
 </head>
 <body>
-    {% if current_user %}
     <div style="position:fixed;top:10px;right:16px;z-index:1000;font-size:14px;background:rgba(255,255,255,.9);padding:6px 12px;border-radius:6px;">
-        {{ current_user }} · <a href="/logout">Log out</a>
+        <a href="/live">🤖 Live bot</a>{% if current_user %} · {{ current_user }} · <a href="/logout">Log out</a>{% endif %}
     </div>
-    {% endif %}
     <div class="container">
         <div class="header">
             <h1>🚀 Kronos Financial Prediction Web UI</h1>

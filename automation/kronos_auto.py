@@ -9,6 +9,8 @@ Kronos automation CLI.
     python -m automation.kronos_auto finetune                # quick CPU fine-tune on bundled CSV
     python -m automation.kronos_auto alert-test              # check Telegram/email/Discord/Slack setup
     python -m automation.kronos_auto account                 # auto-trading account + recent trades
+    python -m automation.kronos_auto configure               # enter API keys and test them
+    python -m automation.kronos_auto check                   # re-test connections / key safety
     python -m automation.kronos_auto live                    # real-time trading (automation/live.yaml)
     python -m automation.kronos_auto live-status --stop      # kill switch: block new buys
     python -m automation.kronos_auto serve                   # start the web UI
@@ -321,6 +323,16 @@ def cmd_live_status(args):
     return 0
 
 
+def cmd_configure(args):
+    from automation import setup_wizard
+    return setup_wizard.configure()
+
+
+def cmd_check(args):
+    from automation import setup_wizard
+    return setup_wizard.check()
+
+
 def cmd_serve(args):
     os.environ.setdefault("KRONOS_DATA_DIR", str(DATA_DIR))
     sys.path.insert(0, str(ROOT / "webui"))
@@ -392,6 +404,12 @@ def main(argv=None):
     s.add_argument("--stop", action="store_true", help="turn the kill switch on (no new buys)")
     s.add_argument("--resume", action="store_true", help="turn the kill switch off")
     s.set_defaults(func=cmd_live_status)
+
+    s = sub.add_parser("configure", help="enter API keys (hidden) into .env and test them")
+    s.set_defaults(func=cmd_configure)
+
+    s = sub.add_parser("check", help="test Binance / Alpaca / Telegram connections and key safety")
+    s.set_defaults(func=cmd_check)
 
     s = sub.add_parser("serve", help="start the web UI")
     s.add_argument("--host", default="0.0.0.0")
