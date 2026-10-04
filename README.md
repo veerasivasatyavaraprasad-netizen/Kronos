@@ -51,6 +51,11 @@
 
 ## ⚡ Automated App — Quick Start
 
+> **Windows, fastest way:** double-click **`RUN_ME.bat`** in the project folder. On the first run it
+> installs Python (if missing), all packages and the Kronos model, asks for your API keys, checks
+> them, opens the live dashboard in your browser and starts the trading bot (Binance in safe *test* mode).
+> Afterwards the same double-click starts everything again in under a minute.
+
 This repo is set up as a ready-to-run app: one command installs everything, downloads the models and runs a test forecast.
 
 ```bash
