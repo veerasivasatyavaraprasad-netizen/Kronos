@@ -1,6 +1,7 @@
 @echo off
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
+set HF_HUB_DISABLE_SYMLINKS_WARNING=1
 REM One-shot Windows setup: venv + dependencies + model download + smoke test.
 cd /d "%~dp0\.."
 if not defined PY call "%~dp0find_python.bat"

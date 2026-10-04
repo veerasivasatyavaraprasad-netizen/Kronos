@@ -125,13 +125,18 @@ def write_markdown(results, path, meta):
 # ----------------------------------------------------------------------------- commands
 
 def cmd_setup_models(args):
-    from huggingface_hub import snapshot_download
+    from huggingface_hub import constants, snapshot_download
+    from huggingface_hub.file_download import are_symlinks_supported
     from automation.forecaster import MODELS
     keys = list(MODELS) if args.all else [args.model]
     for key in keys:
         for repo in MODELS[key][:2]:
             print(f"Downloading {repo} ...")
-            snapshot_download(repo)
+            # On Windows without admin/Developer Mode, symlinks are not allowed. huggingface_hub falls back to
+            # copying, but its check races when files download in parallel (WinError 1314). Run the check once
+            # up front and download sequentially.
+            are_symlinks_supported(os.path.join(constants.HF_HUB_CACHE, "models--" + repo.replace("/", "--")))
+            snapshot_download(repo, max_workers=1)
     print("Models cached.")
 
 

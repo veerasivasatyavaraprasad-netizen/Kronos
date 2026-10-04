@@ -1,6 +1,7 @@
 @echo off
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
+set HF_HUB_DISABLE_SYMLINKS_WARNING=1
 REM Start the Kronos real-time trading bot. Restarts automatically if it crashes.
 REM Settings: automation\live.yaml   Keys: .env   Log: outputs\live\live.log
 REM Stop: close this window or press Ctrl+C.  Block new buys: scripts\stop_buying.bat
