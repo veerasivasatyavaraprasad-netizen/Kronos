@@ -48,6 +48,7 @@ echo ===== Checking connections =====
 .venv\Scripts\python.exe -m automation.kronos_auto check
 if errorlevel 1 goto :check_failed
 
+:start_services
 REM ---- 5. Dashboard (separate minimized window) + open browser ----
 start "Kronos dashboard" /min cmd /c ".venv\Scripts\python.exe -m automation.kronos_auto serve --host 127.0.0.1 --port 7070"
 timeout /t 10 /nobreak >nul
@@ -61,9 +62,11 @@ exit /b 0
 
 :check_failed
 echo.
-echo Some checks FAILED. Fix them with scripts\configure.bat, then run RUN_ME.bat again.
+echo Some checks FAILED (see the X lines above). To fix keys: close this window, run
+echo scripts\configure.bat (paste with a RIGHT-CLICK), then RUN_ME.bat again.
+echo Or press any key to start anyway - accounts that failed are skipped by the bot.
 pause
-exit /b 1
+goto :start_services
 
 :failed
 echo Setup failed - scroll up for the error message.

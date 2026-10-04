@@ -267,15 +267,43 @@ def test_setup_wizard_writes_env_and_checks(exchange, tmp_path, monkeypatch):
     monkeypatch.setattr(w, "ENV_PATH", env)
     monkeypatch.setattr(w, "ROOT", tmp_path)
     (tmp_path / ".env.example").write_text("# comment\nBINANCE_API_KEY=\nBINANCE_SECRET_KEY=\nKRONOS_SECRET_KEY=\n")
-    answers = iter(["new-key", SECRET] + [""] * 20)
+    k64, s64 = "K" * 64, "S" * 64
+    answers = iter([k64, s64] + [""] * 20)
     monkeypatch.setattr(w.getpass, "getpass", lambda prompt="": next(answers))
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     monkeypatch.setattr(w, "CHECKS", [])
     assert w.configure() == 0
     text = env.read_text()
-    assert "# comment" in text and "BINANCE_API_KEY=new-key" in text and f"BINANCE_SECRET_KEY={SECRET}" in text
+    assert "# comment" in text and f"BINANCE_API_KEY={k64}" in text and f"BINANCE_SECRET_KEY={s64}" in text
     assert len(w.read_env_file(env)["KRONOS_SECRET_KEY"]) == 64
 
     monkeypatch.setenv("BINANCE_API_KEY", "test-key")
+    monkeypatch.setenv("BINANCE_SECRET_KEY", SECRET)
+    status, msg = w.check_binance()
+    assert status == "fail" and "64 letters" in msg      # fake-server key is not in Binance format
+    monkeypatch.setattr(w, "valid_format", lambda k, v: True)
     status, msg = w.check_binance()
     assert status in ("ok", "warn") and "canTrade" in msg
+
+
+def test_wizard_cleans_pasted_keys(monkeypatch, capsys):
+    from automation import setup_wizard as w
+    good = "A1b2" * 16  # 64 chars
+    assert w.clean_value("BINANCE_API_KEY", f'  "{good}"  ') == (good, False)
+    assert w.clean_value("BINANCE_API_KEY", f"BINANCE_API_KEY={good}")[0] == good
+    assert w.clean_value("BINANCE_API_KEY", "\x16") == ("", True)          # Ctrl+V in a hidden prompt
+    assert w.clean_value("BINANCE_API_KEY", good + "\x16")[0] == good
+    assert not w.valid_format("BINANCE_API_KEY", good[:-1])
+
+    answers = iter(["\x16x", good])
+    monkeypatch.setattr(w.getpass, "getpass", lambda prompt="": next(answers))
+    assert w.ask("BINANCE_API_KEY", "key", True, None) == good
+    out = capsys.readouterr().out
+    assert "RIGHT-CLICK" in out and "format OK" in out
+
+
+def test_bot_strips_stray_characters_from_env_keys(exchange, monkeypatch):
+    monkeypatch.setenv("BINANCE_API_KEY", " test-key\x16 ")
+    monkeypatch.setenv("BINANCE_SECRET_KEY", f'"{SECRET}"')
+    t = live.LiveTrader(config("test"), predictor=FakePredictor(+0.02))
+    assert t.run_cycle()[0]["action"] == "buy"   # signed requests accepted by the fake exchange

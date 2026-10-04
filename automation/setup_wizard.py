@@ -74,9 +74,60 @@ def mask(v):
     return "(not set)" if not v else (v[:4] + "…" + v[-2:] if len(v) > 8 else "set")
 
 
+KEY_FORMATS = {  # (regex, human description)
+    "BINANCE_API_KEY": (r"[A-Za-z0-9]{64}", "64 letters/digits"),
+    "BINANCE_SECRET_KEY": (r"[A-Za-z0-9]{64}", "64 letters/digits"),
+    "BINANCE_TESTNET_API_KEY": (r"[A-Za-z0-9]{64}", "64 letters/digits"),
+    "BINANCE_TESTNET_SECRET_KEY": (r"[A-Za-z0-9]{64}", "64 letters/digits"),
+    "ALPACA_API_KEY": (r"[A-Z0-9]{16,40}", "16-40 capital letters/digits"),
+    "ALPACA_SECRET_KEY": (r"[A-Za-z0-9]{30,60}", "30-60 letters/digits"),
+    "TELEGRAM_BOT_TOKEN": (r"\d+:[A-Za-z0-9_-]{30,}", "like 123456:ABC..."),
+    "TELEGRAM_CHAT_ID": (r"-?\d+", "a number"),
+}
+
+
+def clean_value(key: str, raw: str):
+    """Strip what commonly sneaks in when pasting: Ctrl+V control chars, spaces, quotes, 'KEY=' prefixes.
+    Returns (value, had_control_chars)."""
+    had_ctrl = any(ord(c) < 32 or ord(c) == 127 for c in raw)
+    v = "".join(c for c in raw if ord(c) >= 32 and ord(c) != 127).strip().strip('"').strip("'").strip()
+    if "=" in v and v.split("=", 1)[0].strip().upper() == key:
+        v = v.split("=", 1)[1].strip().strip('"').strip("'")
+    if key in KEY_FORMATS and key != "TELEGRAM_BOT_TOKEN":
+        v = v.replace(" ", "")
+    return v, had_ctrl
+
+
+def valid_format(key: str, value: str) -> bool:
+    import re
+    fmt = KEY_FORMATS.get(key)
+    return fmt is None or re.fullmatch(fmt[0], value) is not None
+
+
+def ask(key, label, hidden, current):
+    for _ in range(3):
+        prompt = f"  {label} [{mask(current)}]: "
+        raw = getpass.getpass(prompt) if hidden else input(prompt)
+        value, had_ctrl = clean_value(key, raw)
+        if not value:
+            return None
+        if valid_format(key, value):
+            print(f"    received {len(value)} characters - format OK")
+            return value
+        print(f"    That does not look right: got {len(value)} characters, expected {KEY_FORMATS[key][1]}.")
+        if had_ctrl or not value:
+            print("    Ctrl+V does not paste into this hidden prompt - paste with a RIGHT-CLICK instead.")
+        else:
+            print("    Copy the key again from the website (no spaces, no quotes) and paste with a right-click.")
+        print("    Try again, or press Enter to skip.")
+    print("    Skipped.")
+    return None
+
+
 def configure():
     current = read_env_file()
     print("Kronos setup. Press Enter to keep the current value. Keys are typed hidden and saved only in")
+    print("PASTE WITH A RIGHT-CLICK (Ctrl+V does not work in hidden prompts).")
     print(f"{ENV_PATH} on this computer.\n")
     print("Binance key settings: enable 'Spot & Margin Trading', keep 'Enable Withdrawals' OFF,")
     print("and choose 'Restrict access to trusted IPs only' with this PC's IP.\n")
@@ -84,8 +135,7 @@ def configure():
     for section, items in QUESTIONS:
         print(f"== {section}")
         for key, label, hidden in items:
-            prompt = f"  {label} [{mask(current.get(key))}]: "
-            value = (getpass.getpass(prompt) if hidden else input(prompt)).strip()
+            value = ask(key, label, hidden, current.get(key))
             if value:
                 updates[key] = value
     if not (current.get("KRONOS_SECRET_KEY") or updates.get("KRONOS_SECRET_KEY")):
@@ -112,10 +162,18 @@ def _binance_signed(base, key, secret, path, extra=None):
     return requests.get(f"{base}{path}?{q}&signature={sig}", headers={"X-MBX-APIKEY": key}, timeout=15)
 
 
+def _env_key(name):
+    return clean_value(name, os.getenv(name) or "")[0]
+
+
 def check_binance():
-    key, secret = os.getenv("BINANCE_API_KEY"), os.getenv("BINANCE_SECRET_KEY")
+    key, secret = _env_key("BINANCE_API_KEY"), _env_key("BINANCE_SECRET_KEY")
     if not key or not secret:
         return "skip", "no BINANCE_API_KEY / BINANCE_SECRET_KEY"
+    bad = [n for n, v in (("API key", key), ("secret key", secret)) if not valid_format("BINANCE_API_KEY", v)]
+    if bad:
+        return "fail", (f"{' and '.join(bad)} not in Binance format (64 letters/digits; yours: {len(key)} and "
+                        f"{len(secret)} characters). Re-enter with scripts\\configure.bat, pasting with a right-click")
     base = os.getenv("BINANCE_API_BASE_URL", "https://api.binance.com").rstrip("/")
     try:
         drift = abs(requests.get(f"{base}/api/v3/time", timeout=10).json()["serverTime"] - time.time() * 1000)
@@ -145,14 +203,18 @@ def check_binance():
 
 
 def check_binance_testnet():
-    key, secret = os.getenv("BINANCE_TESTNET_API_KEY"), os.getenv("BINANCE_TESTNET_SECRET_KEY")
+    key, secret = _env_key("BINANCE_TESTNET_API_KEY"), _env_key("BINANCE_TESTNET_SECRET_KEY")
     if not key or not secret:
         return "skip", "no testnet keys (only needed for mode: testnet)"
+    # Optional account: problems here are warnings, not failures.
     try:
         r = _binance_signed("https://testnet.binance.vision", key, secret, "/api/v3/account")
-        return ("ok", "testnet connected") if r.status_code == 200 else ("fail", f"{r.status_code} {r.text[:200]}")
+        if r.status_code == 200:
+            return "ok", "testnet connected"
+        return "warn", (f"{r.status_code} {r.text[:150]} - testnet keys come from testnet.binance.vision "
+                        "(your normal Binance keys do not work there); only needed for mode: testnet")
     except Exception as e:
-        return "fail", f"{type(e).__name__}: {e}"
+        return "warn", f"{type(e).__name__}: {e}"
 
 
 def check_alpaca():

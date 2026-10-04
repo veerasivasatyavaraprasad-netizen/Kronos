@@ -123,6 +123,13 @@ class Ledger:
 
 # ============================================================================ brokers
 
+def _clean_secret(value):
+    """Drop whitespace, quotes and invisible control characters picked up when pasting keys."""
+    if not value:
+        return value
+    return "".join(c for c in value if ord(c) > 32 and ord(c) != 127).strip('"').strip("'")
+
+
 def _floor(value, step):
     if step <= 0:
         return value
@@ -147,6 +154,7 @@ class BinanceBroker:
             self.base = os.getenv("BINANCE_API_BASE_URL", LIVE_URLS["binance"]).rstrip("/")
             self.key, self.secret = os.getenv("BINANCE_API_KEY"), os.getenv("BINANCE_SECRET_KEY")
         self.data_base = os.getenv("BINANCE_API_BASE_URL", LIVE_URLS["binance"]).rstrip("/")
+        self.key, self.secret = _clean_secret(self.key), _clean_secret(self.secret)
         if not self.key or not self.secret:
             raise RuntimeError(f"Binance {mode}: API key/secret env vars are not set")
         self.session = requests.Session()
@@ -265,7 +273,7 @@ class AlpacaLiveBroker:
             base = ALPACA_PAPER if mode == "paper" else LIVE_URLS["alpaca"]
         self.base = base
         self.data_base = os.getenv("ALPACA_DATA_BASE_URL", ALPACA_DATA).rstrip("/")
-        key, secret = os.getenv("ALPACA_API_KEY"), os.getenv("ALPACA_SECRET_KEY")
+        key, secret = _clean_secret(os.getenv("ALPACA_API_KEY")), _clean_secret(os.getenv("ALPACA_SECRET_KEY"))
         if not key or not secret:
             raise RuntimeError("Alpaca: ALPACA_API_KEY / ALPACA_SECRET_KEY are not set")
         self.session = requests.Session()
